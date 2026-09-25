@@ -33,6 +33,24 @@ const STEPS = [
   },
   {
     route: "/upload",
+    selector: "[data-tour='quiz-count-slider']",
+    title: "Choose your quiz length",
+    body: "Slide to pick how many quiz questions NoteBuddy generates for this note.",
+  },
+  {
+    route: "/upload",
+    selector: "[data-tour='language-selector']",
+    title: "Study in your language",
+    body: "Generate the whole study kit — summary, flashcards, quiz, even read-aloud — in Hindi, Tamil, Marathi, and more.",
+  },
+  {
+    route: "/upload",
+    selector: "[data-tour='cram-mode-toggle']",
+    title: "Short on time?",
+    body: "Flip this on before generating and you'll get a dense 1-page cheat sheet + 10 highest-yield flashcards instead of the full kit. The ON/OFF pill always shows whether it's active.",
+  },
+  {
+    route: "/upload",
     selector: "[data-tour='generate-btn']",
     title: "Generate your study kit",
     body: "Click this and NoteBuddy's AI builds your summary, flashcards, and quiz. Try it now — the tour ends here so you can explore freely!",

@@ -539,12 +539,12 @@ export default function Upload() {
             <LevelSlider value={level} onChange={setLevel} />
           </div>
 
-          <div className="mt-6">
+          <div className="mt-6" data-tour="quiz-count-slider">
             <p className="text-sm font-bold text-ink/70 mb-2">How many quiz questions?</p>
             <QuizCountSlider value={quizCount} onChange={setQuizCount} />
           </div>
 
-          <div className="mt-6">
+          <div className="mt-6" data-tour="language-selector">
             <p className="text-sm font-bold text-ink/70 mb-2">Language</p>
             <LanguageSelector value={language} onChange={setLanguage} />
           </div>
@@ -552,6 +552,8 @@ export default function Upload() {
           <button
             type="button"
             onClick={() => setCramMode((c) => !c)}
+            aria-pressed={cramMode}
+            data-tour="cram-mode-toggle"
             className={`mt-6 w-full flex items-center gap-3 p-4 rounded-xl2 border-2 text-left transition-all ${
               cramMode ? "bg-sun-50 border-sun-400" : "bg-white border-primary-100 hover:border-primary-200"
             }`}
@@ -559,11 +561,32 @@ export default function Upload() {
             <div className={`w-9 h-9 rounded-xl2 flex items-center justify-center shrink-0 ${cramMode ? "bg-sun-400 text-white" : "bg-primary-50 text-primary-500"}`}>
               <Zap size={18} />
             </div>
-            <div>
-              <p className="font-bold text-sm">Exam Cram Mode</p>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="font-bold text-sm">Exam Cram Mode</p>
+                <span
+                  className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-black tracking-wide ${
+                    cramMode ? "bg-sun-400 text-white" : "bg-ink/10 text-ink/50"
+                  }`}
+                >
+                  {cramMode ? "ON" : "OFF"}
+                </span>
+              </div>
               <p className="text-xs font-semibold text-ink/50">
-                Exam in a few hours? Get a dense 1-page cheat sheet + the 10 highest-yield flashcards instead of the full kit.
+                {cramMode
+                  ? "On — you'll get a dense 1-page cheat sheet + 10 highest-yield flashcards instead of the full kit."
+                  : "Off. Exam in a few hours? Turn this on for a dense 1-page cheat sheet + the 10 highest-yield flashcards instead of the full kit."}
               </p>
+            </div>
+            {/* A toggle-switch affordance, not just a colored card — so the
+                on/off state reads clearly at a glance even before you read
+                the label text above. */}
+            <div
+              className={`shrink-0 w-10 h-6 rounded-full p-0.5 transition-colors ${cramMode ? "bg-sun-400" : "bg-ink/15"}`}
+            >
+              <div
+                className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${cramMode ? "translate-x-4" : "translate-x-0"}`}
+              />
             </div>
           </button>
 

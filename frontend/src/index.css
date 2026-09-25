@@ -43,6 +43,48 @@ body {
   background: #35334f;
 }
 
+/* Same broad-brush idea as .bg-white above, extended to every light-tint
+   "50/100" utility background used throughout the app (auth inputs, quiz
+   explanation boxes, chat bubbles, badge chips, etc). Without this, those
+   elements kept their light lavender/peach/mint background in dark mode
+   while their text flipped to near-white via the ".dark input/textarea"
+   rule above (or via text-ink), producing invisible light-on-light text. */
+.dark .bg-primary-50 {
+  background-color: #232140;
+}
+.dark .bg-primary-100 {
+  background-color: #2a2850;
+}
+.dark .bg-sun-50 {
+  background-color: #3a2f18;
+}
+.dark .bg-coral-50 {
+  background-color: #3a2228;
+}
+.dark .bg-mint-50 {
+  background-color: #17362c;
+}
+.dark .border-primary-50 {
+  border-color: #2a2850;
+}
+.dark .border-primary-100 {
+  border-color: #35335a;
+}
+
+/* Plain-text placed directly on the tint backgrounds above (chip labels,
+   key-term/definition text, chat bubbles) needs to flip too — otherwise a
+   dark brand color that reads fine on a light chip becomes unreadably dim
+   on the near-black chip it now sits on. */
+.dark .text-primary-600,
+.dark .text-primary-700 {
+  color: #B8A9FF;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: rgb(var(--color-ink) / 0.35);
+}
+
 /* Keeps page content from being hidden behind the fixed mobile bottom nav,
    without needing to touch every page's own padding. */
 @media (max-width: 767px) {

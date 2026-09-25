@@ -26,6 +26,25 @@ import LevelSlider from "../components/LevelSlider";
 import { useAuth } from "../context/AuthContext";
 import { regenerateNote, shareNote, recordQuizAnswer } from "../lib/api";
 
+// Maps the language names used across the app (see LanguageSelector /
+// SUPPORTED_LANGUAGES on the backend) to a BCP-47 tag so the browser picks
+// a matching voice for read-aloud instead of always falling back to the
+// system default (usually English), which made non-English summaries get
+// read in the wrong language or garbled.
+const SPEECH_LANG_MAP = {
+  English: "en-US",
+  Hindi: "hi-IN",
+  Marathi: "mr-IN",
+  Tamil: "ta-IN",
+  Telugu: "te-IN",
+  Kannada: "kn-IN",
+  Gujarati: "gu-IN",
+  Bengali: "bn-IN",
+  Malayalam: "ml-IN",
+  Punjabi: "pa-IN",
+  Urdu: "ur-IN",
+};
+
 const TABS = [
   { id: "summary", label: "Summary", icon: BookOpen },
   { id: "flashcards", label: "Flashcards", icon: Layers },
@@ -72,6 +91,22 @@ export default function Results() {
     }
     const utterance = new SpeechSynthesisUtterance(studyKit.summary || "");
     utterance.rate = 1;
+    const langTag = SPEECH_LANG_MAP[language] || "en-US";
+    utterance.lang = langTag;
+    // Some browsers (Chrome especially) need a voice explicitly matched to
+    // the language, not just the "lang" tag, or they silently fall back to
+    // the default English voice. Best-effort — if no matching voice has
+    // loaded yet, utterance.lang alone still steers most browsers/TTS
+    // engines to the right pronunciation.
+    const voices = window.speechSynthesis.getVoices();
+    const matchedVoice =
+      voices.find((v) => v.lang === langTag) || voices.find((v) => v.lang?.startsWith(langTag.split("-")[0]));
+    if (matchedVoice) utterance.voice = matchedVoice;
+    else if (langTag !== "en-US") {
+      toast("Your device may not have a " + language + " voice installed — read-aloud might sound like English.", {
+        icon: "🔊",
+      });
+    }
     utterance.onend = () => setSpeaking(false);
     utterance.onerror = () => setSpeaking(false);
     window.speechSynthesis.cancel();
