@@ -51,17 +51,17 @@ export default function Landing() {
             Built for kids, beginners, and anyone who finds studying overwhelming.
             Paste your notes and get summaries, flashcards, and quizzes made just for you.
           </p>
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 px-4">
             <Link
               to="/signup"
-              className="group px-7 py-3.5 rounded-xl2 bg-primary-500 text-white font-bold shadow-pop hover:bg-primary-600 transition-all flex items-center gap-2"
+              className="group w-full sm:w-auto px-7 py-3.5 rounded-xl2 bg-primary-500 text-white font-bold shadow-pop hover:bg-primary-600 transition-all flex items-center justify-center gap-2"
             >
               Start learning free
               <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
             </Link>
             <Link
               to="/login"
-              className="px-7 py-3.5 rounded-xl2 bg-white text-ink font-bold shadow-card hover:shadow-soft transition-all"
+              className="w-full sm:w-auto px-7 py-3.5 rounded-xl2 bg-white text-ink font-bold shadow-card hover:shadow-soft transition-all text-center"
             >
               I already have an account
             </Link>

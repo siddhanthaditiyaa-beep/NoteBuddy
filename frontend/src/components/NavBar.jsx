@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, LogOut, ChevronDown, User as UserIcon } from "lucide-react";
+import { Sparkles, LogOut, ChevronDown, Menu, X, LayoutDashboard, Brain, Layers, Plus } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 function AccountMenu() {
@@ -73,31 +73,86 @@ function AccountMenu() {
   );
 }
 
+function MobileMenu({ open, onClose }) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-ink/30 z-40 sm:hidden"
+          />
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.18 }}
+            className="absolute left-0 right-0 top-full mx-4 mt-2 bg-white rounded-xl2 shadow-pop border border-primary-50 py-2 z-50 sm:hidden"
+          >
+            <Link
+              onClick={onClose}
+              to="/dashboard"
+              className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-ink/70 hover:bg-primary-50 transition-colors"
+            >
+              <LayoutDashboard size={17} /> Dashboard
+            </Link>
+            <Link
+              onClick={onClose}
+              to="/review"
+              className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-ink/70 hover:bg-primary-50 transition-colors"
+            >
+              <Brain size={17} /> Review
+            </Link>
+            <Link
+              onClick={onClose}
+              to="/combine"
+              className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-ink/70 hover:bg-primary-50 transition-colors"
+            >
+              <Layers size={17} /> Combine
+            </Link>
+            <Link
+              onClick={onClose}
+              to="/upload"
+              className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-primary-600 hover:bg-primary-50 transition-colors"
+            >
+              <Plus size={17} /> New Note
+            </Link>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export default function NavBar() {
   const { user } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <nav className="sticky top-0 z-40 backdrop-blur-md bg-white/70 border-b border-primary-100">
-      <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+    <nav className="sticky top-0 z-40 backdrop-blur-md bg-white/70 border-b border-primary-100 relative">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
         <Link
           to={user ? "/dashboard" : "/"}
-          className="flex items-center gap-2 font-display font-extrabold text-xl text-ink"
+          className="flex items-center gap-2 font-display font-extrabold text-lg sm:text-xl text-ink shrink-0"
         >
           <motion.div
             whileHover={{ rotate: 15, scale: 1.1 }}
-            className="w-9 h-9 rounded-xl2 bg-primary-500 flex items-center justify-center text-white shadow-soft"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl2 bg-primary-500 flex items-center justify-center text-white shadow-soft shrink-0"
           >
-            <Sparkles size={18} />
+            <Sparkles size={16} />
           </motion.div>
           NoteBuddy
         </Link>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {user ? (
             <>
               <Link
                 to="/dashboard"
-                className="text-sm font-bold text-ink/70 hover:text-primary-600 transition-colors"
+                className="hidden sm:inline text-sm font-bold text-ink/70 hover:text-primary-600 transition-colors"
               >
                 Dashboard
               </Link>
@@ -116,11 +171,19 @@ export default function NavBar() {
               <Link
                 to="/upload"
                 data-tour="new-note-btn"
-                className="text-sm font-bold px-4 py-2 rounded-xl2 bg-primary-500 text-white shadow-soft hover:bg-primary-600 transition-colors"
+                className="hidden sm:inline-flex text-sm font-bold px-4 py-2 rounded-xl2 bg-primary-500 text-white shadow-soft hover:bg-primary-600 transition-colors"
               >
                 + New Note
               </Link>
               <AccountMenu />
+              <button
+                onClick={() => setMobileOpen((o) => !o)}
+                className="sm:hidden w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/70 shrink-0"
+                title="Menu"
+              >
+                {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+              </button>
+              <MobileMenu open={mobileOpen} onClose={() => setMobileOpen(false)} />
             </>
           ) : (
             <>
@@ -129,7 +192,7 @@ export default function NavBar() {
               </Link>
               <Link
                 to="/signup"
-                className="text-sm font-bold px-4 py-2 rounded-xl2 bg-primary-500 text-white shadow-soft hover:bg-primary-600 transition-colors"
+                className="text-sm font-bold px-3 sm:px-4 py-2 rounded-xl2 bg-primary-500 text-white shadow-soft hover:bg-primary-600 transition-colors whitespace-nowrap"
               >
                 Get started
               </Link>
