@@ -8,7 +8,7 @@ from app.config import MAX_UPLOAD_MB, MAX_AUDIO_MB, DAILY_GENERATION_LIMIT
 from app.services.extraction import extract_text
 from app.services.youtube_service import get_transcript_text, YouTubeImportError
 from app.services.embeddings_service import embed_and_store_note, search_notes
-from app.services.gemini_service import generate_study_kit, transcribe_audio, AIGenerationError
+from app.services.gemini_service import generate_study_kit, transcribe_audio, detect_contradictions, AIGenerationError
 from app.services import supabase_client
 from app.services.supabase_client import DailyLimitExceeded
 
@@ -425,6 +425,34 @@ async def semantic_search(
     except Exception:
         raise HTTPException(502, "Search isn't available right now — please try again in a moment.")
     return {"results": results}
+
+
+class ContradictionsRequest(BaseModel):
+    note_ids: list[str]
+
+
+@router.post("/contradictions")
+@limiter.limit("10/minute")
+async def contradictions_route(
+    request: Request, req: ContradictionsRequest, current_user: CurrentUser = Depends(get_current_user)
+):
+    """Cross-Note Contradiction & Gap Detector — compares 2-5 of the
+    student's own notes side by side and flags where they disagree with
+    each other, or where one leans on a term none of them actually
+    explain."""
+    if len(req.note_ids) < 2:
+        raise HTTPException(400, "Pick at least two notes to compare.")
+    try:
+        notes = supabase_client.get_notes_by_ids(current_user.id, req.note_ids[:5])
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    if len(notes) < 2:
+        raise HTTPException(404, "Couldn't find at least two of those notes.")
+    try:
+        result = detect_contradictions(notes)
+    except AIGenerationError:
+        raise HTTPException(502, "Couldn't compare those notes right now — please try again.")
+    return result
 
 
 @router.get("/gallery")

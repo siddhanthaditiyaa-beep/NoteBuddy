@@ -78,6 +78,12 @@ export default function Quiz({ questions = [], onAnswer, noteId, showLeaderboard
   const [selected, setSelected] = useState(null);
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
+  // Confidence Calibration Tracking — only meaningful for the logged-in
+  // owner taking their own quiz (onAnswer is only passed there), so a
+  // stranger taking a shared note's quiz never sees this. Defaults to
+  // "Somewhat sure" rather than forcing a choice before every question.
+  const enableConfidence = !!onAnswer;
+  const [confidence, setConfidence] = useState(2);
 
   if (!questions.length) return null;
 
@@ -121,14 +127,26 @@ export default function Quiz({ questions = [], onAnswer, noteId, showLeaderboard
     setSelected(i);
     const isCorrect = i === q.correct_index;
     if (isCorrect) setScore((s) => s + 1);
-    // Feeds the weak-topic tracker on the dashboard — only sent when the
-    // question actually has a topic (older cached study kits from before
-    // this feature won't, so those just don't record anything).
-    if (onAnswer && q.topic) onAnswer({ topic: q.topic, correct: isCorrect });
+    // Feeds the weak-topic tracker (and, with the extra fields, the
+    // question-level log behind Confidence Calibration + the
+    // Mistake-Pattern Retrospective) — only sent when the question
+    // actually has a topic (older cached study kits from before this
+    // feature won't, so those just don't record anything).
+    if (onAnswer && q.topic) {
+      onAnswer({
+        topic: q.topic,
+        correct: isCorrect,
+        question: q.question,
+        chosenAnswer: q.options?.[i],
+        correctAnswer: q.options?.[q.correct_index],
+        confidence: enableConfidence ? confidence : undefined,
+      });
+    }
   };
 
   const next = () => {
     setSelected(null);
+    setConfidence(2);
     if (current + 1 < questions.length) setCurrent((c) => c + 1);
     else setDone(true);
   };
@@ -138,7 +156,28 @@ export default function Quiz({ questions = [], onAnswer, noteId, showLeaderboard
       <div className="text-sm font-bold text-ink/50 mb-3">
         Question {current + 1} of {questions.length}
       </div>
-      <h3 className="font-display text-xl font-bold mb-5">{q.question}</h3>
+      <h3 className="font-display text-xl font-bold mb-4">{q.question}</h3>
+
+      {enableConfidence && selected === null && (
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs font-bold text-ink/40">How sure are you?</span>
+          {[
+            { value: 1, label: "Not sure" },
+            { value: 2, label: "Somewhat" },
+            { value: 3, label: "Very sure" },
+          ].map((c) => (
+            <button
+              key={c.value}
+              onClick={() => setConfidence(c.value)}
+              className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all ${
+                confidence === c.value ? "bg-primary-500 text-white" : "bg-primary-50 text-ink/50"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-3">
         {q.options.map((opt, i) => {

@@ -238,11 +238,21 @@ export async function gradeCard({ userId, noteId, cardIndex, quality }) {
   return handle(res);
 }
 
-export async function recordQuizAnswer({ topic, correct }) {
+export async function recordQuizAnswer({ topic, correct, noteId, question, chosenAnswer, correctAnswer, confidence }) {
   const res = await fetch(`${API_BASE}/api/review/quiz-answer`, {
     method: "POST",
     headers: await authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ topic, correct }),
+    body: JSON.stringify({
+      topic, correct, note_id: noteId, question,
+      chosen_answer: chosenAnswer, correct_answer: correctAnswer, confidence,
+    }),
+  });
+  return handle(res);
+}
+
+export async function getConfidenceCalibration() {
+  const res = await fetch(`${API_BASE}/api/review/confidence-calibration`, {
+    headers: await authHeaders(),
   });
   return handle(res);
 }
@@ -294,6 +304,31 @@ export async function deleteAccount() {
   const res = await fetch(`${API_BASE}/api/user/account`, {
     method: "DELETE",
     headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
+export async function teachBack({ contextText, concept, explanation }) {
+  const res = await fetch(`${API_BASE}/api/practice/teach-back`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ context_text: contextText, concept, explanation }),
+  });
+  return handle(res);
+}
+
+export async function getMistakePatterns() {
+  const res = await fetch(`${API_BASE}/api/practice/mistake-patterns`, {
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
+export async function getContradictions(noteIds) {
+  const res = await fetch(`${API_BASE}/api/notes/contradictions`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ note_ids: noteIds }),
   });
   return handle(res);
 }

@@ -19,12 +19,14 @@ import {
   Check,
   PenLine,
   Headphones,
+  GraduationCap,
 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import FlashcardDeck from "../components/FlashcardDeck";
 import Quiz from "../components/Quiz";
 import ChatPanel from "../components/ChatPanel";
 import PracticeMode from "../components/PracticeMode";
+import TeachBackMode from "../components/TeachBackMode";
 import LevelSlider from "../components/LevelSlider";
 import { useAuth } from "../context/AuthContext";
 import { regenerateNote, shareNote, recordQuizAnswer } from "../lib/api";
@@ -52,6 +54,7 @@ const TABS = [
   { id: "summary", label: "Summary", icon: BookOpen },
   { id: "flashcards", label: "Flashcards", icon: Layers },
   { id: "practice", label: "Practice", icon: PenLine },
+  { id: "teachback", label: "Teach It Back", icon: GraduationCap },
   { id: "quiz", label: "Quiz", icon: ListChecks },
   { id: "mindmap", label: "Mind Map", icon: GitBranch },
   { id: "chat", label: "Ask NoteBuddy", icon: MessageCircle },
@@ -311,8 +314,8 @@ export default function Results() {
     toast.success("In Anki: Import File → pick this CSV → set fields as Front, Back.");
   };
 
-  const handleQuizAnswer = ({ topic, correct }) => {
-    recordQuizAnswer({ topic, correct }).catch(() => {});
+  const handleQuizAnswer = ({ topic, correct, question, chosenAnswer, correctAnswer, confidence }) => {
+    recordQuizAnswer({ topic, correct, noteId, question, chosenAnswer, correctAnswer, confidence }).catch(() => {});
   };
 
   return (
@@ -446,6 +449,11 @@ export default function Results() {
                 {tab === "practice" && (
                   <div className="bg-white rounded-xl2 shadow-card p-8">
                     <PracticeMode cards={studyKit.flashcards} rawText={rawText} />
+                  </div>
+                )}
+                {tab === "teachback" && (
+                  <div className="bg-white rounded-xl2 shadow-card p-8">
+                    <TeachBackMode cards={studyKit.flashcards} rawText={rawText} />
                   </div>
                 )}
                 {tab === "quiz" && (

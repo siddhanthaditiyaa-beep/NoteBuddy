@@ -90,6 +90,23 @@ def get_note(user_id: str, note_id: str) -> dict | None:
     return result.data
 
 
+def get_notes_by_ids(user_id: str, note_ids: list[str]) -> list[dict]:
+    """Only ever returns notes this user actually owns — used by the
+    Cross-Note Contradiction & Gap Detector, which compares raw_text across
+    a few notes the student picks."""
+    if not note_ids:
+        return []
+    client = get_client()
+    result = (
+        client.table("notes")
+        .select("id, title, raw_text")
+        .eq("user_id", user_id)
+        .in_("id", note_ids)
+        .execute()
+    )
+    return result.data or []
+
+
 def award_xp(user_id: str, amount: int) -> dict:
     """Adds XP and bumps the streak if the last activity was yesterday or today."""
     client = get_client()
@@ -370,6 +387,84 @@ def record_quiz_answer(user_id: str, topic: str, correct: bool) -> None:
         field: (row.get(field) or 0) + 1,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }).eq("user_id", user_id).eq("term", topic).execute()
+
+
+# ---------------------------------------------------------------------------
+# Quiz answer log — a richer, question-level record (not just aggregated
+# per-topic counters) that powers Confidence Calibration Tracking and the
+# Personalized Mistake-Pattern Retrospective. Best-effort everywhere it's
+# called from: losing one log row should never break the quiz itself.
+# ---------------------------------------------------------------------------
+
+
+def log_quiz_answer(
+    user_id: str,
+    note_id: str | None,
+    topic: str | None,
+    question: str | None,
+    chosen_answer: str | None,
+    correct_answer: str | None,
+    is_correct: bool,
+    confidence: int | None,
+) -> None:
+    client = get_client()
+    client.table("quiz_answer_log").insert({
+        "user_id": user_id,
+        "note_id": note_id,
+        "topic": (topic or None),
+        "question": (question or "")[:500] or None,
+        "chosen_answer": (chosen_answer or "")[:300] or None,
+        "correct_answer": (correct_answer or "")[:300] or None,
+        "is_correct": is_correct,
+        "confidence": confidence,
+    }).execute()
+
+
+def get_confidence_calibration(user_id: str) -> dict:
+    """Buckets every logged answer that had a confidence rating by that
+    rating, and reports actual accuracy within each bucket — the gap
+    between "how sure I felt" and "how often I was actually right" is
+    exactly what confidence calibration training is about."""
+    client = get_client()
+    result = (
+        client.table("quiz_answer_log")
+        .select("confidence, is_correct")
+        .eq("user_id", user_id)
+        .not_.is_("confidence", "null")
+        .execute()
+    )
+    rows = result.data or []
+    buckets: dict[int, dict] = {}
+    for row in rows:
+        c = row["confidence"]
+        b = buckets.setdefault(c, {"confidence": c, "count": 0, "correct": 0})
+        b["count"] += 1
+        if row["is_correct"]:
+            b["correct"] += 1
+    out = []
+    for c in sorted(buckets):
+        b = buckets[c]
+        out.append({
+            "confidence": c,
+            "count": b["count"],
+            "accuracy": round(b["correct"] / b["count"] * 100) if b["count"] else 0,
+        })
+    return {"buckets": out, "total_logged": len(rows)}
+
+
+def get_recent_wrong_answers(user_id: str, limit: int = 25) -> list[dict]:
+    client = get_client()
+    result = (
+        client.table("quiz_answer_log")
+        .select("topic, question, chosen_answer, correct_answer, created_at")
+        .eq("user_id", user_id)
+        .eq("is_correct", False)
+        .not_.is_("question", "null")
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data or []
 
 
 def get_weak_topics(user_id: str, limit: int = 5) -> list[dict]:

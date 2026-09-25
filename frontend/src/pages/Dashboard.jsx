@@ -11,6 +11,7 @@ import { isDemoUser } from "../lib/constants";
 import { getBadgeVisual } from "../lib/badges";
 import { listNotes, getProgress, getNote, getWeakTopics, searchNotes } from "../lib/api";
 import { shareAchievementCard } from "../lib/achievementCard";
+import InsightsPanel from "../components/InsightsPanel";
 import toast from "react-hot-toast";
 
 function getGreeting(user, notesCount, demo) {
@@ -242,6 +243,8 @@ export default function Dashboard() {
               )}
             </div>
           )}
+
+          {notes.length > 0 && <InsightsPanel />}
 
           {weakTopics.length > 0 && (
             <div className="mb-8 bg-white rounded-xl2 shadow-card p-5">

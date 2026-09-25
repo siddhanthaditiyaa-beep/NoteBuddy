@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
-import { Layers, Wand2, CheckSquare, Square } from "lucide-react";
+import { Layers, Wand2, CheckSquare, Square, GitCompare, Loader2, AlertTriangle, HelpCircle } from "lucide-react";
 import NavBar from "../components/NavBar";
 import LevelSlider from "../components/LevelSlider";
 import QuizCountSlider from "../components/QuizCountSlider";
 import LanguageSelector from "../components/LanguageSelector";
 import { useAuth } from "../context/AuthContext";
-import { listNotes, combineNotes } from "../lib/api";
+import { listNotes, combineNotes, getContradictions } from "../lib/api";
 
 export default function Combine() {
   const { user } = useAuth();
@@ -20,6 +20,8 @@ export default function Combine() {
   const [quizCount, setQuizCount] = useState(5);
   const [language, setLanguage] = useState("English");
   const [generating, setGenerating] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState(null);
 
   useEffect(() => {
     if (!user) return;
@@ -31,6 +33,29 @@ export default function Combine() {
 
   const toggle = (id) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setCheckResult(null); // selection changed — stale results would be misleading
+  };
+
+  // Cross-Note Contradiction & Gap Detector — reads the selected notes side
+  // by side and flags places where they disagree, or where one leans on a
+  // term none of them actually explain. Separate from combining: this is
+  // for catching inconsistencies BEFORE exam day, not for generating a
+  // study kit.
+  const checkContradictions = async () => {
+    if (selected.length < 2) {
+      toast.error("Pick at least 2 notes to compare.");
+      return;
+    }
+    setChecking(true);
+    setCheckResult(null);
+    try {
+      const res = await getContradictions(selected);
+      setCheckResult(res);
+    } catch (e) {
+      toast.error(e.message || "Couldn't compare those notes right now.");
+    } finally {
+      setChecking(false);
+    }
   };
 
   const submit = async () => {
@@ -138,6 +163,61 @@ export default function Combine() {
                   </>
                 )}
               </button>
+
+              <button
+                onClick={checkContradictions}
+                disabled={checking || selected.length < 2}
+                className="mt-3 w-full py-3 rounded-xl2 bg-white text-ink/70 font-bold text-sm shadow-card hover:text-primary-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+              >
+                {checking ? <Loader2 size={16} className="animate-spin" /> : <GitCompare size={16} />}
+                Check these notes for contradictions & gaps
+              </button>
+
+              {checkResult && (
+                <div className="mt-4 bg-white rounded-xl2 shadow-card p-5">
+                  {checkResult.contradictions?.length === 0 && checkResult.gaps?.length === 0 ? (
+                    <p className="text-sm font-semibold text-mint-700">{checkResult.summary}</p>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-ink/60 mb-4">{checkResult.summary}</p>
+                      {checkResult.contradictions?.length > 0 && (
+                        <div className="mb-4">
+                          <h4 className="font-display text-sm font-bold text-coral-600 mb-2 flex items-center gap-1.5">
+                            <AlertTriangle size={15} /> Contradictions
+                          </h4>
+                          <div className="space-y-2">
+                            {checkResult.contradictions.map((c, i) => (
+                              <div key={i} className="p-3 rounded-xl2 bg-coral-50/60">
+                                <p className="font-bold text-sm text-coral-700">{c.topic}</p>
+                                <p className="text-xs font-semibold text-ink/50 mb-1">
+                                  {c.note_a} vs {c.note_b}
+                                </p>
+                                <p className="text-sm font-semibold text-ink/70">{c.issue}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {checkResult.gaps?.length > 0 && (
+                        <div>
+                          <h4 className="font-display text-sm font-bold text-sun-600 mb-2 flex items-center gap-1.5">
+                            <HelpCircle size={15} /> Gaps
+                          </h4>
+                          <div className="space-y-2">
+                            {checkResult.gaps.map((g, i) => (
+                              <div key={i} className="p-3 rounded-xl2 bg-sun-50/60">
+                                <p className="font-bold text-sm text-sun-700">{g.term}</p>
+                                <p className="text-xs font-semibold text-ink/50 mb-1">{g.mentioned_in}</p>
+                                <p className="text-sm font-semibold text-ink/70">{g.why_it_matters}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </>
           )}
         </motion.div>

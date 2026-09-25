@@ -315,6 +315,108 @@ def regenerate_at_level(text: str, level: str, quiz_count: int = 5) -> dict:
     return generate_study_kit(text, level, quiz_count)
 
 
+# ---------------------------------------------------------------------------
+# Part 5 "signature wow" features — pedagogy group.
+# ---------------------------------------------------------------------------
+
+
+def evaluate_teach_back(context_text: str, concept: str, explanation: str) -> dict:
+    """Feynman/Teach-Back Mode: the student explains a concept in their own
+    words as if teaching it to someone else, and Gemini plays the role of a
+    patient tutor grading that explanation against the source material —
+    the single most reliable way to expose a shallow or memorized
+    understanding, since you can't fake teaching something you don't
+    actually understand."""
+    prompt = f"""You are NoteBuddy, a friendly AI tutor running a "teach it back to me" exercise (the Feynman technique). A student just tried to explain a concept in their own words, as if teaching it to someone else. Your job is to check whether their explanation actually demonstrates understanding, not just whether it sounds confident.
+
+SOURCE MATERIAL (ground truth):
+\"\"\"
+{context_text[:6000]}
+\"\"\"
+
+CONCEPT THEY WERE ASKED TO TEACH BACK:
+{concept[:500]}
+
+THE STUDENT'S EXPLANATION:
+\"\"\"
+{explanation[:2000]}
+\"\"\"
+
+Respond with ONLY a JSON object in exactly this shape (no markdown fences, no commentary):
+{{
+  "understanding_level": "solid" | "partial" | "shaky",
+  "got_right": ["short phrase describing something they explained correctly", "..."],
+  "gaps": ["short phrase describing something missing, vague, or wrong in their explanation", "..."],
+  "feedback": "3-4 warm, honest sentences as if a tutor were speaking directly to the student — praise what's genuinely solid, name the specific gap that matters most, and suggest what to re-read or think about next"
+}}
+If got_right or gaps has nothing to report, use an empty array rather than inventing filler."""
+    return _call_gemini_json(prompt, {"understanding_level", "got_right", "gaps", "feedback"}, max_attempts=2)
+
+
+def analyze_mistake_patterns(wrong_answers: list[dict]) -> dict:
+    """Looks across a student's actual wrong quiz answers (not just which
+    topics they missed) to name a PATTERN — e.g. 'you keep confusing X and
+    Y' or 'you get the definition right but misapply it in scenarios' —
+    the kind of specific, actionable feedback a real tutor gives after
+    watching someone struggle over several sessions."""
+    if not wrong_answers:
+        return {"has_pattern": False, "patterns": [], "summary": "Not enough missed questions yet to spot a pattern — keep taking quizzes!"}
+
+    formatted = "\n\n".join(
+        f"Q: {w.get('question', '')}\nTopic: {w.get('topic') or 'unspecified'}\n"
+        f"They chose: {w.get('chosen_answer', '')}\nCorrect answer: {w.get('correct_answer', '')}"
+        for w in wrong_answers[:25]
+    )
+    prompt = f"""You are NoteBuddy, an AI tutor reviewing a student's recent WRONG quiz answers to find a genuine pattern in their mistakes — not just a list of topics, but the underlying habit or misconception causing them, e.g. "consistently mixes up two similar terms," "picks the most detailed-sounding option even when it's wrong," "understands the definition but not how to apply it."
+
+THE STUDENT'S RECENT WRONG ANSWERS:
+{formatted}
+
+Respond with ONLY a JSON object in exactly this shape (no markdown fences, no commentary):
+{{
+  "has_pattern": true | false,
+  "patterns": [
+    {{"pattern": "short name for the pattern", "explanation": "1-2 sentences describing the pattern with concrete evidence from the examples above", "fix": "1 concrete, specific suggestion for what to do differently"}}
+  ],
+  "summary": "1-2 encouraging sentences summarizing the overall picture"
+}}
+Set has_pattern to false and patterns to an empty array only if the mistakes genuinely look random/unrelated. Never invent a pattern that isn't actually supported by the examples given."""
+    return _call_gemini_json(prompt, {"has_pattern", "patterns", "summary"}, max_attempts=2)
+
+
+def detect_contradictions(notes: list[dict]) -> dict:
+    """Cross-Note Contradiction & Gap Detector: reads several of a
+    student's own notes side by side and flags places where they seem to
+    disagree with each other, or where one note assumes something the
+    others never actually explain — the kind of inconsistency that's easy
+    to miss when notes were taken on different days but gets exposed the
+    moment you have to explain the material on an exam."""
+    if len(notes) < 2:
+        return {"contradictions": [], "gaps": [], "summary": "Add at least two notes on related topics to compare them."}
+
+    formatted = "\n\n".join(
+        f"--- NOTE: \"{n.get('title', 'Untitled')}\" ---\n{(n.get('raw_text') or '')[:3000]}"
+        for n in notes[:5]
+    )
+    prompt = f"""You are NoteBuddy, an AI study assistant comparing a student's own notes side by side to catch two things: (1) places where two notes seem to say something CONTRADICTORY or inconsistent about the same topic, and (2) GAPS — a term or concept one note relies on that none of the notes actually explain.
+
+THE STUDENT'S NOTES:
+{formatted}
+
+Respond with ONLY a JSON object in exactly this shape (no markdown fences, no commentary):
+{{
+  "contradictions": [
+    {{"topic": "short topic name", "note_a": "which note", "note_b": "which note", "issue": "1-2 sentences describing exactly how they disagree or are inconsistent"}}
+  ],
+  "gaps": [
+    {{"term": "the undefined term or concept", "mentioned_in": "which note(s) mention it without explaining it", "why_it_matters": "1 sentence on why understanding this gap matters"}}
+  ],
+  "summary": "1-2 sentences overall — if nothing was found, say so encouragingly rather than inventing an issue"
+}}
+Only report a contradiction or gap you can point to concrete evidence for in the text above — never invent one to fill the shape. Empty arrays are a perfectly good, expected result when the notes are consistent."""
+    return _call_gemini_json(prompt, {"contradictions", "gaps", "summary"}, max_attempts=2)
+
+
 def transcribe_audio(file_bytes: bytes, filename: str) -> str:
     """Turns an uploaded (or recorded) audio clip — a lecture, a voice memo of
     notes, etc. — into a plain-text transcript, using Gemini's native audio
