@@ -233,7 +233,7 @@ export default function Upload() {
                   <>
                     <Play size={28} className="text-primary-400" />
                     <p className="font-bold text-ink/60">Recording ready</p>
-                    <audio src={audioUrl} controls className="w-64" />
+                    <audio src={audioUrl} controls className="w-full max-w-[260px]" />
                     <div className="flex gap-2">
                       <button
                         onClick={startRecording}
