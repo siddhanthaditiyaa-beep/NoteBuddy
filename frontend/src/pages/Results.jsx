@@ -438,7 +438,7 @@ export default function Results() {
                     )}
                   </div>
                 )}
-                {tab === "chat" && <ChatPanel rawText={rawText} />}
+                {tab === "chat" && <ChatPanel rawText={rawText} language={language} />}
               </motion.div>
             )}
           </AnimatePresence>

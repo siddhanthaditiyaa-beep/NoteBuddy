@@ -7,7 +7,7 @@ import { chatAboutNotes } from "../lib/api";
 const SpeechRecognitionAPI =
   typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
-export default function ChatPanel({ rawText }) {
+export default function ChatPanel({ rawText, language = "English" }) {
   const [messages, setMessages] = useState([
     { role: "assistant", content: "Hi! I'm NoteBuddy 👋 Ask me anything about this material and I'll explain it." },
   ]);
@@ -61,7 +61,7 @@ export default function ChatPanel({ rawText }) {
     setInput("");
     setLoading(true);
     try {
-      const { reply } = await chatAboutNotes({ rawText, question, history: nextMessages });
+      const { reply } = await chatAboutNotes({ rawText, question, history: nextMessages, language });
       setMessages((m) => [...m, { role: "assistant", content: reply }]);
     } catch (e) {
       setMessages((m) => [...m, { role: "assistant", content: "Hmm, I couldn't reach the AI just now. Try again?" }]);

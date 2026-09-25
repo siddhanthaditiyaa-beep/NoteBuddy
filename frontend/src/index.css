@@ -85,6 +85,28 @@ body {
   color: rgb(var(--color-ink) / 0.35);
 }
 
+/* The rules above only catch elements with the base "bg-primary-50" class
+   always present. A lot of menu items (NavBar's account/mobile menus,
+   flashcard nav, Spotlight tour) instead use "hover:bg-primary-50" etc.,
+   which Tailwind compiles into its own ":hover" selector — so hovering
+   them in dark mode was still painting the light tint with light text on
+   top, unreadable. Same fix, targeted at the hover/pseudo-class variants. */
+.dark .hover\:bg-primary-50:hover {
+  background-color: #232140;
+}
+.dark .hover\:bg-primary-100:hover {
+  background-color: #2a2850;
+}
+.dark .hover\:bg-coral-50:hover {
+  background-color: #3a2228;
+}
+.dark .hover\:bg-sun-50:hover {
+  background-color: #3a2f18;
+}
+.dark .hover\:bg-mint-50:hover {
+  background-color: #17362c;
+}
+
 /* Keeps page content from being hidden behind the fixed mobile bottom nav,
    without needing to touch every page's own padding. */
 @media (max-width: 767px) {

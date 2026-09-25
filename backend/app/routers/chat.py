@@ -16,6 +16,7 @@ class ChatRequest(BaseModel):
     raw_text: str
     question: str
     history: list[ChatTurn] = []
+    language: str = "English"
 
 
 @router.post("")
@@ -30,6 +31,7 @@ async def chat(
             text=req.raw_text,
             question=req.question,
             history=[turn.model_dump() for turn in req.history],
+            language=req.language,
         )
     except AIGenerationError:
         raise HTTPException(502, "NoteBuddy couldn't reply just now — please try again in a moment.")

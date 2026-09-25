@@ -105,11 +105,11 @@ export async function getSharedNote(noteId) {
   return handle(res);
 }
 
-export async function chatAboutNotes({ rawText, question, history }) {
+export async function chatAboutNotes({ rawText, question, history, language = "English" }) {
   const res = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: await authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ raw_text: rawText, question, history }),
+    body: JSON.stringify({ raw_text: rawText, question, history, language }),
   });
   return handle(res);
 }

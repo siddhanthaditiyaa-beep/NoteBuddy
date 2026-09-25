@@ -79,6 +79,12 @@ def generate_study_plan(user_id: str, goal: str, note_ids: list[str] | None = No
 
 Use the tools available to you to find out what's actually due for review, what topics this student is weak on, and what notes they have — then build a realistic day-by-day study plan. Prioritize weak topics and due flashcard reviews over spreading time evenly across everything.
 
+STAY ON-SUBJECT — this is important:
+- get_weak_topics returns this student's weak topics across EVERY subject they've ever studied, not just the one in this goal. get_note_summaries tells you each saved note's subject.
+- If the goal names a specific subject or exam (e.g. "History", "exam about the French Revolution"), the plan must cover ONLY that subject. Before including a weak topic, check whether it plausibly belongs to that subject (cross-reference it against the subjects/titles from get_note_summaries) — if it clearly belongs to a different, unrelated subject (e.g. a Biology term like "Photosynthesis" showing up in a History plan), leave it out entirely, even though the tool returned it.
+- Only fall back to mixing subjects together if the goal itself is broad/general (e.g. "catch up on everything", "prep for finals week" with no single subject named).
+- Every task you write must be something the student would recognize as relevant to what they told you their goal was — don't pad days with unrelated material just because it happened to come back from a tool call.
+
 Once you've gathered what you need, respond with ONLY a JSON object (no markdown fences, no commentary) in exactly this shape:
 {{
   "days": [
@@ -89,7 +95,7 @@ Once you've gathered what you need, respond with ONLY a JSON object (no markdown
 
 Rules:
 - Base the number of days on what the goal implies (e.g. "exam in 5 days" -> 5 days; no timeframe given -> default to 3 days).
-- 2-5 concrete tasks per day. Reference specific note titles or weak topics when you have them.
+- 2-5 concrete tasks per day. Reference specific note titles or weak topics when you have them, but only ones on-subject per the rule above.
 - Most days should end with a short review task (due flashcards or a quick self-quiz), not just new material.
 - Keep it realistic for a student — don't overload any single day.
 """
