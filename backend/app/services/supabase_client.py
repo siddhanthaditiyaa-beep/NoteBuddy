@@ -10,6 +10,13 @@ from app.config import SUPABASE_URL, SUPABASE_SERVICE_KEY
 _client: Client | None = None
 
 
+class DailyLimitExceeded(Exception):
+    """Raised when a user has hit their daily AI-generation cap — kept as
+    its own exception (rather than a generic RuntimeError) so routers can
+    tell "Supabase isn't configured" apart from "you're out of generations
+    for today" and return the right HTTP status for each."""
+
+
 def get_client() -> Client:
     global _client
     if _client is None:
@@ -82,6 +89,39 @@ def get_profile(user_id: str) -> dict:
     client = get_client()
     result = client.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
     return result.data if result and result.data else {"id": user_id, "xp": 0, "streak": 0}
+
+
+def check_and_increment_daily_generations(user_id: str, limit: int) -> None:
+    """Hard per-user daily cap on AI generations, so one student (or a bot)
+    can't burn through the whole class's shared free-tier Gemini quota.
+    Call this BEFORE the Gemini call, not after, so a blocked request never
+    reaches the AI. Raises DailyLimitExceeded once the cap is hit today."""
+    client = get_client()
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    existing = (
+        client.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
+    )
+    profile = existing.data if existing and existing.data else None
+
+    if profile is None:
+        client.table("profiles").insert(
+            {"id": user_id, "xp": 0, "streak": 0, "daily_gen_count": 1, "daily_gen_date": today}
+        ).execute()
+        return
+
+    if profile.get("daily_gen_date") != today:
+        client.table("profiles").update(
+            {"daily_gen_count": 1, "daily_gen_date": today}
+        ).eq("id", user_id).execute()
+        return
+
+    count = profile.get("daily_gen_count") or 0
+    if count >= limit:
+        raise DailyLimitExceeded(
+            f"You've reached today's limit of {limit} AI generations — come back tomorrow!"
+        )
+    client.table("profiles").update({"daily_gen_count": count + 1}).eq("id", user_id).execute()
 
 
 # ---------------------------------------------------------------------------

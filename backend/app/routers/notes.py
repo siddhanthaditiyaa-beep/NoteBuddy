@@ -1,28 +1,68 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Request
 from pydantic import BaseModel
+from app.auth import get_current_user, CurrentUser
+from app.rate_limit import limiter
+from app.config import MAX_UPLOAD_MB, MAX_AUDIO_MB, DAILY_GENERATION_LIMIT
 from app.services.extraction import extract_text
-from app.services.gemini_service import generate_study_kit, transcribe_audio
+from app.services.gemini_service import generate_study_kit, transcribe_audio, AIGenerationError
 from app.services import supabase_client
+from app.services.supabase_client import DailyLimitExceeded
 
 router = APIRouter(prefix="/api/notes", tags=["notes"])
 
 AUDIO_EXTENSIONS = (".mp3", ".wav", ".m4a", ".ogg", ".oga", ".webm", ".aac", ".flac", ".mp4")
+DOC_EXTENSIONS = (".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".txt")
+ALLOWED_EXTENSIONS = AUDIO_EXTENSIONS + DOC_EXTENSIONS
+
+
+def _enforce_daily_cap(user_id: str):
+    try:
+        supabase_client.check_and_increment_daily_generations(user_id, DAILY_GENERATION_LIMIT)
+    except DailyLimitExceeded as e:
+        raise HTTPException(429, str(e))
+    except RuntimeError:
+        pass  # Supabase not configured yet — don't block local dev
+
+
+def _run_generation(source_text: str, level: str, quiz_count: int) -> dict:
+    try:
+        return generate_study_kit(source_text, level=level, quiz_count=quiz_count)
+    except AIGenerationError as e:
+        raise HTTPException(502, "NoteBuddy's AI is having trouble right now — please try again in a moment.")
 
 
 @router.post("/process")
+@limiter.limit("10/minute")
 async def process_note(
-    user_id: str = Form(...),
+    request: Request,
     level: str = Form("beginner"),
     text: str | None = Form(None),
     file: UploadFile | None = File(None),
     quiz_count: int = Form(5),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Accepts either pasted text OR an uploaded file (PDF/image), runs OCR/
-    extraction if needed, then asks Gemini to build the full study kit."""
+    """Accepts either pasted text OR an uploaded file (PDF/image/audio), runs
+    OCR/transcription if needed, then asks Gemini to build the full study kit."""
+    user_id = current_user.id
+
     if file is not None:
+        filename_lower = file.filename.lower()
+        if not filename_lower.endswith(ALLOWED_EXTENSIONS):
+            raise HTTPException(415, "That file type isn't supported. Try a PDF, photo, text file, or audio clip.")
+
         raw_bytes = await file.read()
-        if file.filename.lower().endswith(AUDIO_EXTENSIONS):
-            source_text = transcribe_audio(raw_bytes, file.filename)
+        is_audio = filename_lower.endswith(AUDIO_EXTENSIONS)
+        size_cap_mb = MAX_AUDIO_MB if is_audio else MAX_UPLOAD_MB
+        if len(raw_bytes) > size_cap_mb * 1024 * 1024:
+            raise HTTPException(
+                413, f"That file is too large — please keep {'audio clips' if is_audio else 'uploads'} under {size_cap_mb:.0f}MB."
+            )
+
+        if is_audio:
+            try:
+                source_text = transcribe_audio(raw_bytes, file.filename)
+            except AIGenerationError:
+                raise HTTPException(502, "Couldn't transcribe that audio right now — please try again in a moment.")
         else:
             source_text = extract_text(file.filename, raw_bytes)
     elif text:
@@ -37,7 +77,8 @@ async def process_note(
             "text directly, or a clearer photo/PDF.",
         )
 
-    study_kit = generate_study_kit(source_text, level=level, quiz_count=quiz_count)
+    _enforce_daily_cap(user_id)
+    study_kit = _run_generation(source_text, level, quiz_count)
 
     saved = None
     try:
@@ -57,17 +98,22 @@ async def process_note(
 
 
 class CombineRequest(BaseModel):
-    user_id: str
     note_ids: list[str]
     level: str = "beginner"
     quiz_count: int = 5
 
 
 @router.post("/combine")
-async def combine_notes(req: CombineRequest):
+@limiter.limit("10/minute")
+async def combine_notes(
+    request: Request,
+    req: CombineRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
     """Merges several of the learner's saved notes into one combined study
     kit — handy for reviewing everything before an exam that spans several
     lectures, rather than jumping between separate study kits."""
+    user_id = current_user.id
     if len(req.note_ids) < 2:
         raise HTTPException(400, "Pick at least 2 notes to combine.")
 
@@ -75,7 +121,7 @@ async def combine_notes(req: CombineRequest):
     titles = []
     try:
         for note_id in req.note_ids:
-            note = supabase_client.get_note(req.user_id, note_id)
+            note = supabase_client.get_note(user_id, note_id)
             if not note:
                 continue
             titles.append(note["title"])
@@ -87,7 +133,8 @@ async def combine_notes(req: CombineRequest):
         raise HTTPException(404, "Couldn't find enough of those notes to combine.")
 
     combined_text = "\n\n".join(sections)
-    study_kit = generate_study_kit(combined_text, level=req.level, quiz_count=req.quiz_count)
+    _enforce_daily_cap(user_id)
+    study_kit = _run_generation(combined_text, req.level, req.quiz_count)
     study_kit["title"] = f"Combined review: {', '.join(titles[:3])}" + (
         f" +{len(titles) - 3} more" if len(titles) > 3 else ""
     )
@@ -95,13 +142,13 @@ async def combine_notes(req: CombineRequest):
     saved = None
     try:
         saved = supabase_client.save_note(
-            user_id=req.user_id,
+            user_id=user_id,
             title=study_kit["title"],
             raw_text=combined_text,
             study_kit=study_kit,
             subject="Combined",
         )
-        supabase_client.award_xp(req.user_id, amount=15)
+        supabase_client.award_xp(user_id, amount=15)
     except RuntimeError:
         pass
 
@@ -109,17 +156,17 @@ async def combine_notes(req: CombineRequest):
 
 
 @router.get("/list")
-async def list_notes(user_id: str):
+async def list_notes(current_user: CurrentUser = Depends(get_current_user)):
     try:
-        return {"notes": supabase_client.list_notes(user_id)}
+        return {"notes": supabase_client.list_notes(current_user.id)}
     except RuntimeError as e:
         raise HTTPException(503, str(e))
 
 
 @router.get("/{note_id}")
-async def get_note(note_id: str, user_id: str):
+async def get_note(note_id: str, current_user: CurrentUser = Depends(get_current_user)):
     try:
-        note = supabase_client.get_note(user_id, note_id)
+        note = supabase_client.get_note(current_user.id, note_id)
     except RuntimeError as e:
         raise HTTPException(503, str(e))
     if not note:
@@ -128,12 +175,15 @@ async def get_note(note_id: str, user_id: str):
 
 
 @router.post("/{note_id}/regenerate")
+@limiter.limit("10/minute")
 async def regenerate_note(
+    request: Request,
     note_id: str,
-    user_id: str = Form(...),
     level: str = Form(...),
     quiz_count: int = Form(5),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
+    user_id = current_user.id
     try:
         note = supabase_client.get_note(user_id, note_id)
     except RuntimeError as e:
@@ -141,5 +191,6 @@ async def regenerate_note(
     if not note:
         raise HTTPException(404, "Note not found")
 
-    study_kit = generate_study_kit(note["raw_text"], level=level, quiz_count=quiz_count)
+    _enforce_daily_cap(user_id)
+    study_kit = _run_generation(note["raw_text"], level, quiz_count)
     return {"study_kit": study_kit}

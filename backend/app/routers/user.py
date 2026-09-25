@@ -1,11 +1,13 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from app.auth import get_current_user, CurrentUser
 from app.services import supabase_client
 
 router = APIRouter(prefix="/api/user", tags=["user"])
 
 
 @router.get("/progress")
-async def progress(user_id: str):
+async def progress(current_user: CurrentUser = Depends(get_current_user)):
+    user_id = current_user.id
     try:
         profile = supabase_client.get_profile(user_id)
         notes_count = len(supabase_client.list_notes(user_id))
