@@ -48,6 +48,62 @@ export async function processNote({ userId, level, text, file, quizCount = 5, la
   return handle(res);
 }
 
+// Same job as processNote, but consumes the backend's Server-Sent Events
+// stream so the caller gets real staged progress (extracting -> generating
+// -> saving -> done) via onStage, instead of one opaque request that could
+// be sitting anywhere in a 10-30s window. Plain fetch + a manual reader
+// rather than EventSource, because EventSource can't send our auth header
+// or a multipart body.
+export async function processNoteStream({
+  userId, level, text, file, quizCount = 5, language = "English", mode = "full", onStage,
+}) {
+  const form = new FormData();
+  form.append("user_id", userId);
+  form.append("level", level);
+  form.append("quiz_count", quizCount);
+  form.append("language", language);
+  form.append("mode", mode);
+  if (file) form.append("file", file);
+  else form.append("text", text);
+
+  const res = await fetch(`${API_BASE}/api/notes/process-stream`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: form,
+  });
+
+  if (!res.ok || !res.body) {
+    return handle(res); // surfaces the normal JSON error body
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? ""; // last element may be an incomplete event — keep it for next read
+
+    for (const raw of events) {
+      const line = raw.trim();
+      if (!line.startsWith("data:")) continue;
+      let payload;
+      try {
+        payload = JSON.parse(line.slice(5).trim());
+      } catch {
+        continue;
+      }
+      if (payload.stage === "error") throw new Error(payload.message || "Something went wrong.");
+      if (payload.stage === "done") return payload.data;
+      onStage?.(payload.stage);
+    }
+  }
+  throw new Error("Connection closed before NoteBuddy finished — please try again.");
+}
+
 // Extraction only (OCR/PDF text) — no Gemini call, completely free. Lets the
 // student review and fix bad OCR before spending a generation on it.
 export async function extractText({ files }) {
@@ -57,6 +113,17 @@ export async function extractText({ files }) {
     method: "POST",
     headers: await authHeaders(),
     body: form,
+  });
+  return handle(res);
+}
+
+// Free — no Gemini call. Pulls a YouTube lecture's existing captions so the
+// student can review/edit them like any pasted note before generating.
+export async function getYoutubeTranscript(url) {
+  const res = await fetch(`${API_BASE}/api/notes/youtube-transcript`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ url }),
   });
   return handle(res);
 }

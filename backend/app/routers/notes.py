@@ -1,9 +1,12 @@
+import json
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.auth import get_current_user, CurrentUser
 from app.rate_limit import limiter
 from app.config import MAX_UPLOAD_MB, MAX_AUDIO_MB, DAILY_GENERATION_LIMIT
 from app.services.extraction import extract_text
+from app.services.youtube_service import get_transcript_text, YouTubeImportError
 from app.services.gemini_service import generate_study_kit, transcribe_audio, AIGenerationError
 from app.services import supabase_client
 from app.services.supabase_client import DailyLimitExceeded
@@ -87,6 +90,25 @@ async def extract_only(
     return {"text": combined, "pages": len(files)}
 
 
+class YouTubeRequest(BaseModel):
+    url: str
+
+
+@router.post("/youtube-transcript")
+@limiter.limit("15/minute")
+async def youtube_transcript(
+    request: Request, req: YouTubeRequest, current_user: CurrentUser = Depends(get_current_user)
+):
+    """Free — no Gemini call. Returns the raw transcript text so the
+    frontend can drop it into the same editable-text flow as a pasted note
+    (review/edit, then generate), rather than a special-cased pipeline."""
+    try:
+        result = get_transcript_text(req.url)
+    except YouTubeImportError as e:
+        raise HTTPException(422, str(e))
+    return result
+
+
 @router.post("/process")
 @limiter.limit("10/minute")
 async def process_note(
@@ -153,6 +175,108 @@ async def process_note(
         pass
 
     return {"note": saved, "study_kit": study_kit, "raw_text": source_text, "language": language, "mode": mode}
+
+
+def _sse(stage: str, **extra) -> str:
+    return f"data: {json.dumps({'stage': stage, **extra})}\n\n"
+
+
+async def _process_stream_generator(
+    user_id: str, level: str, text: str | None, file: UploadFile | None,
+    quiz_count: int, language: str, mode: str,
+):
+    """Same work as /process, but reports real stages as it goes (extracting
+    -> generating -> saving -> done) instead of the frontend showing one
+    static spinner for the whole 10-30 second request. A student on a slow
+    connection can now tell the app is actually doing something, not frozen."""
+    try:
+        source_text = None
+        if file is not None:
+            filename_lower = file.filename.lower()
+            if not filename_lower.endswith(ALLOWED_EXTENSIONS):
+                yield _sse("error", message="That file type isn't supported. Try a PDF, photo, text file, or audio clip.")
+                return
+            raw_bytes = await file.read()
+            is_audio = filename_lower.endswith(AUDIO_EXTENSIONS)
+            size_cap_mb = MAX_AUDIO_MB if is_audio else MAX_UPLOAD_MB
+            if len(raw_bytes) > size_cap_mb * 1024 * 1024:
+                yield _sse(
+                    "error",
+                    message=f"That file is too large — please keep {'audio clips' if is_audio else 'uploads'} under {size_cap_mb:.0f}MB.",
+                )
+                return
+            yield _sse("extracting")
+            if is_audio:
+                try:
+                    source_text = transcribe_audio(raw_bytes, file.filename)
+                except AIGenerationError:
+                    yield _sse("error", message="Couldn't transcribe that audio right now — please try again in a moment.")
+                    return
+            else:
+                source_text = extract_text(file.filename, raw_bytes)
+        elif text:
+            source_text = text
+        else:
+            yield _sse("error", message="Provide either 'text' or a 'file' upload.")
+            return
+
+        if not source_text or len(source_text.strip()) < 20:
+            yield _sse(
+                "error",
+                message="Couldn't find enough readable text in that input — try pasting text directly, or a clearer photo/PDF.",
+            )
+            return
+
+        try:
+            _enforce_daily_cap(user_id)
+        except HTTPException as e:
+            yield _sse("error", message=str(e.detail))
+            return
+
+        yield _sse("generating")
+        try:
+            study_kit = _generate_with_cache(source_text, level, quiz_count, language, mode)
+        except HTTPException as e:
+            yield _sse("error", message=str(e.detail))
+            return
+
+        yield _sse("saving")
+        saved = None
+        try:
+            saved = supabase_client.save_note(
+                user_id=user_id, title=study_kit.get("title", "Untitled note"), raw_text=source_text, study_kit=study_kit
+            )
+            supabase_client.award_xp(user_id, amount=10)
+        except RuntimeError:
+            pass
+
+        yield _sse(
+            "done",
+            data={"note": saved, "study_kit": study_kit, "raw_text": source_text, "language": language, "mode": mode},
+        )
+    except Exception:
+        yield _sse("error", message="Something went wrong generating your study kit.")
+
+
+@router.post("/process-stream")
+@limiter.limit("10/minute")
+async def process_note_stream(
+    request: Request,
+    level: str = Form("beginner"),
+    text: str | None = Form(None),
+    file: UploadFile | None = File(None),
+    quiz_count: int = Form(5),
+    language: str = Form("English"),
+    mode: str = Form("full"),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Same request shape as /process, but streamed as Server-Sent Events
+    (one 'data: {...}' line per stage) instead of one final JSON blob."""
+    return StreamingResponse(
+        _process_stream_generator(current_user.id, level, text, file, quiz_count, language, mode),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 class CombineRequest(BaseModel):

@@ -298,6 +298,7 @@ export default function Results() {
               <button
                 onClick={toggleSpeak}
                 title={speaking ? "Stop reading" : "Read summary aloud"}
+                aria-label={speaking ? "Stop reading" : "Read summary aloud"}
                 className="w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors"
               >
                 {speaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
@@ -305,6 +306,7 @@ export default function Results() {
               <button
                 onClick={downloadPdf}
                 title="Download as PDF"
+                aria-label="Download as PDF"
                 className="w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors"
               >
                 <Download size={16} />
@@ -312,6 +314,7 @@ export default function Results() {
               <button
                 onClick={downloadAnkiCsv}
                 title="Export flashcards for Anki (CSV)"
+                aria-label="Export flashcards for Anki as CSV"
                 className="w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors text-xs font-black"
               >
                 CSV
@@ -320,6 +323,7 @@ export default function Results() {
                 onClick={handleShare}
                 disabled={sharing}
                 title={shareUrl ? "Copy share link" : "Create a shareable link"}
+                aria-label={shareUrl ? "Copy share link" : "Create a shareable link"}
                 className="w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors disabled:opacity-60"
               >
                 {copied ? <Check size={16} className="text-mint-500" /> : shareUrl ? <Copy size={16} /> : <Share2 size={16} />}

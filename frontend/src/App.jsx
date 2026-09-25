@@ -3,6 +3,7 @@ import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext";
 import { TourProvider } from "./context/TourContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import { FontSizeProvider } from "./context/FontSizeContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Spotlight from "./components/Spotlight";
 import BottomNav from "./components/BottomNav";
@@ -21,6 +22,7 @@ export default function App() {
   return (
     <AuthProvider>
       <ThemeProvider>
+      <FontSizeProvider>
       <BrowserRouter>
         <TourProvider>
           <Toaster position="top-center" toastOptions={{ style: { fontWeight: 700 } }} />
@@ -82,6 +84,7 @@ export default function App() {
           </Routes>
         </TourProvider>
       </BrowserRouter>
+      </FontSizeProvider>
       </ThemeProvider>
     </AuthProvider>
   );

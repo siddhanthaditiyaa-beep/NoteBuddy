@@ -27,6 +27,15 @@ export default function FlashcardDeck({ cards = [] }) {
           animate={{ rotateY: flipped ? 180 : 0 }}
           transition={{ duration: 0.5 }}
           onClick={() => setFlipped((f) => !f)}
+          role="button"
+          tabIndex={0}
+          aria-label={flipped ? "Showing answer — press Enter to flip back" : "Showing question — press Enter to reveal answer"}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setFlipped((f) => !f);
+            }
+          }}
         >
           <div
             className="absolute inset-0 rounded-xl3 bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-pop flex items-center justify-center p-8 text-center [backface-visibility:hidden]"
@@ -45,18 +54,21 @@ export default function FlashcardDeck({ cards = [] }) {
       <div className="flex items-center gap-4">
         <button
           onClick={() => go(-1)}
+          aria-label="Previous flashcard"
           className="w-10 h-10 rounded-full bg-white shadow-card flex items-center justify-center hover:bg-primary-50 transition-colors"
         >
           <ChevronLeft size={20} />
         </button>
         <button
           onClick={() => setFlipped((f) => !f)}
+          aria-label="Flip flashcard"
           className="w-10 h-10 rounded-full bg-white shadow-card flex items-center justify-center hover:bg-primary-50 transition-colors"
         >
           <RotateCw size={16} />
         </button>
         <button
           onClick={() => go(1)}
+          aria-label="Next flashcard"
           className="w-10 h-10 rounded-full bg-white shadow-card flex items-center justify-center hover:bg-primary-50 transition-colors"
         >
           <ChevronRight size={20} />

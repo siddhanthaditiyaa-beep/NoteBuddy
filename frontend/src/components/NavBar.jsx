@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { Sparkles, LogOut, ChevronDown, Menu, X, LayoutDashboard, Brain, Layers, Plus, Sun, Moon, CalendarDays, Bell, BellOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { useFontSize } from "../context/FontSizeContext";
 import { isPushSupported, getPushSubscriptionStatus, enablePushReminders, disablePushReminders } from "../lib/push";
 
 function ThemeToggle() {
@@ -13,10 +14,43 @@ function ThemeToggle() {
     <button
       onClick={toggleTheme}
       title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
       className="w-9 h-9 rounded-xl2 bg-white dark:bg-[#1c1b2e] shadow-card flex items-center justify-center text-ink/70 shrink-0 hover:text-primary-600 transition-colors"
     >
       {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
     </button>
+  );
+}
+
+// A-/A+ text-size control — scales the whole app via a root CSS variable
+// (see FontSizeContext) since a study app gets heavy use during long,
+// tired late-night sessions where readability matters most.
+function FontSizeToggle() {
+  const fontSize = useFontSize();
+  if (!fontSize) return null;
+  const { decrease, increase, atMin, atMax } = fontSize;
+  return (
+    <div className="hidden sm:flex items-center rounded-xl2 bg-white dark:bg-[#1c1b2e] shadow-card overflow-hidden shrink-0">
+      <button
+        onClick={decrease}
+        disabled={atMin}
+        title="Decrease text size"
+        aria-label="Decrease text size"
+        className="w-8 h-9 flex items-center justify-center text-xs font-black text-ink/60 hover:text-primary-600 disabled:opacity-30 transition-colors"
+      >
+        A-
+      </button>
+      <div className="w-px h-4 bg-primary-100 dark:bg-white/10" />
+      <button
+        onClick={increase}
+        disabled={atMax}
+        title="Increase text size"
+        aria-label="Increase text size"
+        className="w-8 h-9 flex items-center justify-center text-sm font-black text-ink/60 hover:text-primary-600 disabled:opacity-30 transition-colors"
+      >
+        A+
+      </button>
+    </div>
   );
 }
 
@@ -239,12 +273,14 @@ export default function NavBar() {
               >
                 + New Note
               </Link>
+              <FontSizeToggle />
               <ThemeToggle />
               <AccountMenu />
               <button
                 onClick={() => setMobileOpen((o) => !o)}
                 className="sm:hidden w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/70 shrink-0"
                 title="Menu"
+                aria-label={mobileOpen ? "Close menu" : "Open menu"}
               >
                 {mobileOpen ? <X size={18} /> : <Menu size={18} />}
               </button>
@@ -252,6 +288,7 @@ export default function NavBar() {
             </>
           ) : (
             <>
+              <FontSizeToggle />
               <ThemeToggle />
               <Link to="/login" className="text-sm font-bold text-ink/70 hover:text-primary-600">
                 Log in

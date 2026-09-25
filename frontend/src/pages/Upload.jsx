@@ -1,32 +1,73 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import {
   UploadCloud, FileText, Image as ImageIcon, Wand2, Sparkles, Mic, Square, Play, Trash2, X, Zap,
-  Camera, FolderOpen, Loader2, ArrowLeft, FileWarning,
+  Camera, FolderOpen, Loader2, ArrowLeft, FileWarning, Video,
 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import LevelSlider from "../components/LevelSlider";
 import QuizCountSlider from "../components/QuizCountSlider";
 import LanguageSelector from "../components/LanguageSelector";
 import { useAuth } from "../context/AuthContext";
-import { processNote, extractText } from "../lib/api";
+import { processNoteStream, extractText, getYoutubeTranscript } from "../lib/api";
 
-const EXAMPLES = [
+// A wider bank than just 3 examples so a student's stated subject (from the
+// signup question, see onboarding personalization) can surface a matching
+// one first, instead of every user seeing the exact same Biology/History/CS
+// trio regardless of what they actually study.
+const EXAMPLE_BANK = [
   {
     label: "🌱 Biology example",
+    subjects: ["biology", "bio", "life science", "botany", "zoology"],
     text: "Photosynthesis is the process by which plants convert light energy into chemical energy. It occurs mainly in the leaves, within organelles called chloroplasts. The process has two main stages: the light-dependent reactions, which occur in the thylakoid membranes and produce ATP and NADPH using sunlight, water, and chlorophyll; and the Calvin cycle, which occurs in the stroma and uses that ATP and NADPH to convert carbon dioxide into glucose. The overall equation is: 6CO2 + 6H2O + light energy -> C6H12O6 + 6O2. Photosynthesis is essential because it produces the oxygen we breathe and forms the base of nearly every food chain on Earth.",
   },
   {
     label: "🏛️ History example",
+    subjects: ["history", "social studies", "civics"],
     text: "The French Revolution began in 1789 and fundamentally transformed France's political and social structure. It was driven by widespread frustration with the absolute monarchy, a rigid class system dividing society into three estates, and severe financial crisis caused by costly wars and lavish royal spending. The storming of the Bastille on July 14, 1789 became a symbol of the uprising against royal authority. The revolution led to the abolition of feudal privileges, the Declaration of the Rights of Man and of the Citizen, and eventually the execution of King Louis XVI in 1793. It ultimately gave rise to Napoleon Bonaparte's rise to power by the end of the century.",
   },
   {
     label: "💻 Computer Science example",
+    subjects: ["computer science", "cs", "programming", "coding", "engineering", "cybersecurity", "it"],
     text: "A binary search tree (BST) is a data structure where each node has at most two children, referred to as the left and right child. For every node, all values in its left subtree are smaller than the node's value, and all values in its right subtree are larger. This property allows for efficient searching, insertion, and deletion, each typically taking O(log n) time on a balanced tree, since at each step you can eliminate half of the remaining nodes from consideration. However, if the tree becomes unbalanced (for example, if values are inserted in sorted order), performance can degrade to O(n), which is why self-balancing variants like AVL trees and Red-Black trees exist.",
   },
+  {
+    label: "⚛️ Physics example",
+    subjects: ["physics"],
+    text: "Newton's second law of motion states that the acceleration of an object is directly proportional to the net force acting on it and inversely proportional to its mass, expressed as F = ma. This means a larger force produces a larger acceleration, while a larger mass resists acceleration more (more inertia). The law lets us predict how an object will move once we know every force acting on it — from a ball rolling down a ramp to a rocket accelerating in space. It also underlies the concept of weight (W = mg), since gravity is itself a force acting on an object's mass.",
+  },
+  {
+    label: "🧪 Chemistry example",
+    subjects: ["chemistry"],
+    text: "A chemical bond is the attractive force that holds atoms together in a compound. Ionic bonds form when one atom transfers electrons to another, creating oppositely charged ions that attract each other (as in table salt, NaCl). Covalent bonds form when atoms share electron pairs instead of transferring them, common between nonmetals (as in water, H2O). Metallic bonds involve a 'sea' of shared electrons across many metal atoms, which is why metals conduct electricity well. The type of bond an element forms depends on its position on the periodic table and its electronegativity relative to the atoms it's bonding with.",
+  },
+  {
+    label: "📐 Mathematics example",
+    subjects: ["math", "mathematics", "maths", "calculus", "algebra"],
+    text: "The derivative of a function measures how fast its output changes as its input changes — the instantaneous rate of change, or the slope of the tangent line at a point. Formally, the derivative of f(x) at x=a is the limit as h approaches 0 of [f(a+h) - f(a)] / h. Common rules make this practical to compute: the power rule (d/dx of x^n is n·x^(n-1)), the product rule, and the chain rule for composed functions. Derivatives are used to find maximum/minimum points, model velocity from a position function, and optimize real-world quantities like cost or area.",
+  },
+  {
+    label: "📖 Literature example",
+    subjects: ["english", "literature", "language arts"],
+    text: "Foreshadowing is a literary device where a writer hints at events that will occur later in the story, building tension and preparing the reader subconsciously for what's to come. It can be subtle (a passing comment, a symbol, a change in weather) or more direct (a character's explicit warning). Effective foreshadowing rewards a careful reader on a second read-through, since early details take on new meaning once the full story is known. It differs from a plot twist in that foreshadowing is meant to be at least partially noticed, while a twist is designed to surprise.",
+  },
+  {
+    label: "💰 Economics example",
+    subjects: ["economics", "commerce", "business"],
+    text: "The law of supply and demand describes how the price of a good is determined by the balance between how much of it producers are willing to sell (supply) and how much consumers want to buy (demand) at a given price. When demand exceeds supply, prices tend to rise, since buyers compete for a limited quantity. When supply exceeds demand, prices tend to fall, since sellers compete for scarce buyers. The point where the two curves intersect is called the equilibrium price — the price at which the quantity supplied equals the quantity demanded, with no natural pressure to move further.",
+  },
 ];
+
+function pickExamplesFor(studySubject) {
+  if (!studySubject) return EXAMPLE_BANK.slice(0, 3);
+  const needle = studySubject.trim().toLowerCase();
+  const match = EXAMPLE_BANK.find((ex) => ex.subjects.some((s) => needle.includes(s) || s.includes(needle)));
+  if (!match) return EXAMPLE_BANK.slice(0, 3);
+  const rest = EXAMPLE_BANK.filter((ex) => ex !== match).slice(0, 2);
+  return [match, ...rest];
+}
 
 const DOC_ACCEPT = ".pdf,image/*";
 
@@ -57,13 +98,23 @@ let pageIdCounter = 0;
 export default function Upload() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  // Signup asks "what are you studying?" (see Signup.jsx) — when answered,
+  // lead with an example from that subject instead of the same generic
+  // Biology/History/CS trio every student sees regardless of what they
+  // actually take.
+  const EXAMPLES = useMemo(() => pickExamplesFor(user?.user_metadata?.study_subject), [user]);
   const [mode, setMode] = useState("text");
   const [text, setText] = useState("");
   const [level, setLevel] = useState("beginner");
   const [quizCount, setQuizCount] = useState(5);
   const [language, setLanguage] = useState("English");
-  const [cramMode, setCramMode] = useState(false);
+  // Default Exam Cram Mode on for students who told us at signup they have
+  // an exam coming up soon (see Signup.jsx's "study goal" question) — still
+  // fully visible/toggleable via the ON/OFF pill, just a sensible starting
+  // point instead of everyone starting from the same default.
+  const [cramMode, setCramMode] = useState(() => /exam/i.test(user?.user_metadata?.study_goal || ""));
   const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState(null); // "extracting" | "generating" | "saving" — real staged progress, not a guess
   const audioFileInputRef = useRef(null);
 
   // --- Multi-page file mode (PDF / photos) ------------------------------
@@ -77,6 +128,28 @@ export default function Upload() {
   const cameraInputRef = useRef(null);
   const browseInputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
+
+  // --- YouTube mode ---------------------------------------------------------
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [fetchingTranscript, setFetchingTranscript] = useState(false);
+
+  const handleFetchTranscript = async () => {
+    if (!youtubeUrl.trim()) {
+      toast.error("Paste a YouTube link first.");
+      return;
+    }
+    setFetchingTranscript(true);
+    try {
+      const res = await getYoutubeTranscript(youtubeUrl.trim());
+      setText(res.text);
+      setMode("text"); // reuse the normal paste-text review/edit flow — zero extra Gemini calls
+      toast.success("Transcript loaded — review it below, then generate!");
+    } catch (e) {
+      toast.error(e.message || "Couldn't fetch that video's transcript.");
+    } finally {
+      setFetchingTranscript(false);
+    }
+  };
 
   // --- Audio mode ---------------------------------------------------------
   const [file, setFile] = useState(null);
@@ -126,6 +199,7 @@ export default function Upload() {
     setMode(m);
     setFile(null);
     setAudioUrl(null);
+    setYoutubeUrl("");
     resetPages();
   };
 
@@ -203,8 +277,9 @@ export default function Upload() {
       return;
     }
     setLoading(true);
+    setStage(mode === "file" ? "generating" : "extracting"); // file text is already extracted by this point; audio/text start at "generating" too once the stream opens
     try {
-      const result = await processNote({
+      const result = await processNoteStream({
         userId: user.id,
         level,
         quizCount,
@@ -212,6 +287,7 @@ export default function Upload() {
         mode: cramMode ? "cram" : "full",
         text: mode === "audio" ? undefined : effectiveText,
         file: mode === "audio" ? file : undefined,
+        onStage: setStage,
       });
       sessionStorage.setItem("notebuddy_last_result", JSON.stringify(result));
       toast.success("+10 XP! Your study kit is ready 🎉");
@@ -227,8 +303,16 @@ export default function Upload() {
       }
     } finally {
       setLoading(false);
+      setStage(null);
     }
   };
+
+  const STAGE_LABELS = {
+    extracting: "Reading your material...",
+    generating: "NoteBuddy is thinking...",
+    saving: "Saving your study kit...",
+  };
+  const STAGE_ORDER = ["extracting", "generating", "saving"];
 
   const wordCount = extractedText ? extractedText.trim().split(/\s+/).filter(Boolean).length : 0;
   const suspiciouslyShort = extractedText !== null && wordCount > 0 && wordCount < 15;
@@ -276,6 +360,14 @@ export default function Upload() {
               }`}
             >
               <Mic size={18} /> Record / audio
+            </button>
+            <button
+              onClick={() => switchMode("youtube")}
+              className={`flex-1 py-3 rounded-xl2 font-bold flex items-center justify-center gap-2 border-2 transition-all ${
+                mode === "youtube" ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-primary-100 text-ink/60"
+              }`}
+            >
+              <Video size={18} /> YouTube
             </button>
           </div>
 
@@ -430,6 +522,42 @@ export default function Upload() {
               <p className="text-xs font-semibold text-ink/40">
                 This is exactly what NoteBuddy will study from — edit anything the scan got wrong, then generate below.
               </p>
+            </div>
+          )}
+
+          {mode === "youtube" && (
+            <div className="mb-6 space-y-3">
+              <div className="w-full rounded-xl2 bg-white shadow-card p-5">
+                <div className="w-12 h-12 rounded-xl2 bg-coral-50 flex items-center justify-center text-coral-500 mb-3">
+                  <Video size={22} />
+                </div>
+                <p className="font-bold text-ink/70 mb-1">Paste a lecture link</p>
+                <p className="text-xs font-semibold text-ink/40 mb-3">
+                  Free — pulls the video's existing captions/transcript, no download or audio transcription needed.
+                </p>
+                <input
+                  type="url"
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleFetchTranscript()}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  aria-label="YouTube video URL"
+                  className="w-full mb-3 px-4 py-2.5 rounded-xl2 bg-primary-50 outline-none font-semibold text-sm focus:ring-2 focus:ring-primary-300"
+                />
+                <button
+                  onClick={handleFetchTranscript}
+                  disabled={fetchingTranscript}
+                  className="w-full py-3 rounded-xl2 bg-primary-500 text-white font-bold text-sm shadow-soft hover:bg-primary-600 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+                >
+                  {fetchingTranscript ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" /> Fetching transcript...
+                    </>
+                  ) : (
+                    "Fetch transcript"
+                  )}
+                </button>
+              </div>
             </div>
           )}
 
@@ -594,6 +722,7 @@ export default function Upload() {
             onClick={handleSubmit}
             disabled={loading || (mode === "file" && extractedText === null)}
             data-tour="generate-btn"
+            aria-label={loading ? STAGE_LABELS[stage] || "Generating your study kit" : "Generate my study kit"}
             className="mt-8 w-full py-4 rounded-xl2 bg-primary-500 text-white font-bold text-lg shadow-pop hover:bg-primary-600 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
           >
             {loading ? (
@@ -604,7 +733,7 @@ export default function Upload() {
                 >
                   <Wand2 size={20} />
                 </motion.span>
-                NoteBuddy is thinking...
+                {STAGE_LABELS[stage] || "NoteBuddy is thinking..."}
               </>
             ) : (
               <>
@@ -612,6 +741,38 @@ export default function Upload() {
               </>
             )}
           </button>
+
+          {/* Real staged progress, driven by the backend's SSE stream — not
+              a single static spinner for the whole 10-30s request, so a
+              student on a slow connection can see the app is actually
+              working rather than assuming it's frozen. */}
+          {loading && (
+            <div className="mt-4 space-y-2" role="status" aria-live="polite">
+              {STAGE_ORDER.map((s) => {
+                const currentIdx = STAGE_ORDER.indexOf(stage);
+                const thisIdx = STAGE_ORDER.indexOf(s);
+                const state = thisIdx < currentIdx ? "done" : thisIdx === currentIdx ? "active" : "pending";
+                return (
+                  <div key={s} className="flex items-center gap-2.5 text-sm font-bold">
+                    <span
+                      className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] ${
+                        state === "done"
+                          ? "bg-mint-500 text-white"
+                          : state === "active"
+                          ? "bg-primary-500 text-white animate-pulse"
+                          : "bg-ink/10 text-ink/30"
+                      }`}
+                    >
+                      {state === "done" ? "✓" : thisIdx + 1}
+                    </span>
+                    <span className={state === "pending" ? "text-ink/30" : "text-ink/70"}>
+                      {STAGE_LABELS[s]}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </motion.div>
       </div>
     </div>

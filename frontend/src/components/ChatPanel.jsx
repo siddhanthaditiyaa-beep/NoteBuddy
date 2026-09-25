@@ -119,11 +119,13 @@ export default function ChatPanel({ rawText, language = "English" }) {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder={listening ? "Listening..." : "Ask a question about this..."}
+          aria-label="Ask a question about this material"
           className="flex-1 px-4 py-2.5 rounded-xl2 bg-primary-50 outline-none font-semibold text-sm focus:ring-2 focus:ring-primary-300"
         />
         <button
           onClick={toggleListen}
           title={listening ? "Stop listening" : "Ask by voice"}
+          aria-label={listening ? "Stop listening" : "Ask by voice"}
           className={`w-10 h-10 rounded-xl2 flex items-center justify-center shrink-0 transition-colors ${
             listening ? "bg-coral-500 text-white animate-pulse" : "bg-primary-50 text-primary-600 hover:bg-primary-100"
           }`}
@@ -133,6 +135,7 @@ export default function ChatPanel({ rawText, language = "English" }) {
         <button
           onClick={send}
           disabled={loading}
+          aria-label="Send question"
           className="w-10 h-10 rounded-xl2 bg-primary-500 text-white flex items-center justify-center shrink-0 hover:bg-primary-600 disabled:opacity-50 transition-colors"
         >
           <Send size={16} />

@@ -33,13 +33,22 @@ export default function Signup() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [studySubject, setStudySubject] = useState("");
+  const [studyGoal, setStudyGoal] = useState("");
   const [loading, setLoading] = useState(false);
   const passwordRef = useRef(null);
 
   const submit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await signUp(email, password);
+    // Feeds Upload.jsx's example bank (subject-relevant instead of generic)
+    // and its Exam Cram Mode default (on, if an exam's coming up soon) —
+    // zero extra infrastructure, just two optional signup questions stored
+    // straight on the Supabase auth user's metadata.
+    const { error } = await signUp(email, password, {
+      study_subject: studySubject.trim() || undefined,
+      study_goal: studyGoal || undefined,
+    });
     setLoading(false);
     if (error) toast.error(error.message);
     else {
@@ -107,8 +116,43 @@ export default function Signup() {
           minLength={6}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full mb-6 px-4 py-2.5 rounded-xl2 bg-primary-50 outline-none font-semibold focus:ring-2 focus:ring-primary-300"
+          className="w-full mb-4 px-4 py-2.5 rounded-xl2 bg-primary-50 outline-none font-semibold focus:ring-2 focus:ring-primary-300"
         />
+
+        <label className="block text-sm font-bold text-ink/70 mb-1">
+          What are you studying? <span className="font-semibold text-ink/40">(optional)</span>
+        </label>
+        <input
+          type="text"
+          value={studySubject}
+          onChange={(e) => setStudySubject(e.target.value)}
+          placeholder="e.g. Biology, History, Computer Science"
+          className="w-full mb-4 px-4 py-2.5 rounded-xl2 bg-primary-50 outline-none font-semibold focus:ring-2 focus:ring-primary-300"
+        />
+
+        <label className="block text-sm font-bold text-ink/70 mb-1">
+          Exam coming up, or steady revision? <span className="font-semibold text-ink/40">(optional)</span>
+        </label>
+        <div className="flex gap-2 mb-6">
+          {[
+            { value: "", label: "Skip" },
+            { value: "exam soon", label: "Exam soon" },
+            { value: "steady revision", label: "Steady revision" },
+          ].map((opt) => (
+            <button
+              key={opt.label}
+              type="button"
+              onClick={() => setStudyGoal(opt.value)}
+              className={`flex-1 py-2 rounded-xl2 font-bold text-xs border-2 transition-all ${
+                studyGoal === opt.value
+                  ? "bg-primary-500 border-primary-500 text-white"
+                  : "bg-white border-primary-100 text-ink/60"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
 
         <button
           type="submit"

@@ -5,6 +5,11 @@
 :root {
   --color-ink: 21 20 41;       /* #151429 */
   --color-cloud: 247 246 251;  /* #F7F6FB */
+  --base-font-size: 16px;      /* toggled by the A-/A+ control in NavBar (see FontSizeContext) */
+}
+
+html {
+  font-size: var(--base-font-size);
 }
 
 .dark {

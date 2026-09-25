@@ -11,3 +11,6 @@ python-multipart==0.0.9
 slowapi==0.1.9
 sentry-sdk[fastapi]==2.14.0
 pywebpush==2.0.1
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+youtube-transcript-api==0.6.2
