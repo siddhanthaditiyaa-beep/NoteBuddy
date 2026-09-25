@@ -66,6 +66,9 @@ export default function Landing() {
               I already have an account
             </Link>
           </div>
+          <Link to="/gallery" className="inline-block mt-5 text-sm font-bold text-ink/40 hover:text-primary-600 hover:underline">
+            Or browse public study kits made by other students →
+          </Link>
         </motion.div>
 
         <motion.div

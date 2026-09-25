@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { FileText, Plus, Flame, Trophy, BookOpen, Search, Layers, Brain, Target, CalendarDays } from "lucide-react";
+import { FileText, Plus, Flame, Trophy, BookOpen, Search, Layers, Brain, Target, CalendarDays, Clock, Share2, Sparkles, Loader2 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import XPBar from "../components/XPBar";
 import Skeleton from "../components/Skeleton";
@@ -9,7 +9,9 @@ import { useAuth } from "../context/AuthContext";
 import { useTour } from "../context/TourContext";
 import { isDemoUser } from "../lib/constants";
 import { getBadgeVisual } from "../lib/badges";
-import { listNotes, getProgress, getNote, getWeakTopics } from "../lib/api";
+import { listNotes, getProgress, getNote, getWeakTopics, searchNotes } from "../lib/api";
+import { shareAchievementCard } from "../lib/achievementCard";
+import toast from "react-hot-toast";
 
 function getGreeting(user, notesCount, demo) {
   if (demo) return "You're exploring the NoteBuddy demo 🎮";
@@ -34,6 +36,10 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [activeSubject, setActiveSubject] = useState(null);
   const [weakTopics, setWeakTopics] = useState([]);
+  const [semQuery, setSemQuery] = useState("");
+  const [semResults, setSemResults] = useState(null); // null = not searched yet
+  const [semLoading, setSemLoading] = useState(false);
+  const [semOpeningId, setSemOpeningId] = useState(null);
 
   useEffect(() => {
     if (!user) return;
@@ -68,6 +74,63 @@ export default function Dashboard() {
     }
   }, [user, tour]);
 
+  // Purely arithmetic, no AI call: estimates how long it would have taken
+  // to hand-write a summary of this much material PLUS make flashcards and
+  // a quiz from it (~8 words/minute of focused handwriting/typing, plus a
+  // flat ~15 minutes per note for manually drafting flashcards and quiz
+  // questions), vs. the seconds NoteBuddy actually took. The single most
+  // persuasive number in a demo/pitch — a concrete before/after, not a
+  // feature list.
+  const timeSavedHours = useMemo(() => {
+    const totalMinutes = notes.reduce((sum, n) => sum + (n.word_count || 0) / 8 + 15, 0);
+    return Math.round((totalMinutes / 60) * 10) / 10;
+  }, [notes]);
+
+  // Semantic search — "which of my notes mentioned mitochondria?" — finds
+  // matching passages by meaning, not just title substring like the search
+  // box further down. Separate from that box on purpose: this one costs a
+  // Gemini embeddings call, so it only fires on submit, not on every
+  // keystroke.
+  const runSemanticSearch = async (e) => {
+    e.preventDefault();
+    const q = semQuery.trim();
+    if (q.length < 3 || semLoading) return;
+    setSemLoading(true);
+    try {
+      const { results } = await searchNotes(q);
+      setSemResults(results || []);
+    } catch (err) {
+      toast.error(err.message || "Search isn't available right now.");
+      setSemResults([]);
+    } finally {
+      setSemLoading(false);
+    }
+  };
+
+  const openFromSearch = async (noteId) => {
+    setSemOpeningId(noteId);
+    try {
+      const full = await getNote(noteId, user.id);
+      sessionStorage.setItem(
+        "notebuddy_last_result",
+        JSON.stringify({ study_kit: full.study_kit, raw_text: full.raw_text, note: full })
+      );
+      window.location.href = "/results";
+    } catch {
+      toast.error("Couldn't open that note right now.");
+      setSemOpeningId(null);
+    }
+  };
+
+  const shareCard = async (opts) => {
+    try {
+      const result = await shareAchievementCard(opts);
+      if (result === "downloaded") toast.success("Achievement card saved — share it anywhere!");
+    } catch (e) {
+      if (e.name !== "AbortError") toast.error("Couldn't create the share card right now.");
+    }
+  };
+
   const subjects = useMemo(() => {
     const set = new Set(notes.map((n) => n.subject || "General"));
     return Array.from(set);
@@ -101,7 +164,7 @@ export default function Dashboard() {
               : "Here's where your learning is at."}
           </p>
 
-          <div className="grid sm:grid-cols-3 gap-4 mb-8">
+          <div className="grid sm:grid-cols-3 gap-4 mb-4">
             <div className="sm:col-span-2">
               <XPBar
                 xp={progress.xp}
@@ -120,6 +183,65 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {timeSavedHours > 0 && (
+            <div className="mb-8 bg-gradient-to-br from-mint-400 to-mint-500 rounded-xl2 p-5 text-white flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl2 bg-white/20 flex items-center justify-center shrink-0">
+                <Clock size={24} />
+              </div>
+              <div>
+                <p className="font-display text-xl font-extrabold leading-none">
+                  ~{timeSavedHours} hour{timeSavedHours === 1 ? "" : "s"} saved
+                </p>
+                <p className="text-xs font-bold text-white/80 mt-1">
+                  vs. making these notes, flashcards, and quizzes by hand
+                </p>
+              </div>
+            </div>
+          )}
+
+          {notes.length >= 2 && (
+            <div className="mb-8 bg-white rounded-xl2 shadow-card p-5">
+              <h2 className="font-display text-sm font-bold text-ink/50 mb-3 flex items-center gap-2">
+                <Sparkles size={16} className="text-primary-500" /> Search across everything you've studied
+              </h2>
+              <form onSubmit={runSemanticSearch} className="flex gap-2">
+                <input
+                  value={semQuery}
+                  onChange={(e) => setSemQuery(e.target.value)}
+                  placeholder="e.g. 'what did I write about mitochondria?'"
+                  className="flex-1 px-4 py-2.5 rounded-xl2 bg-white shadow-card outline-none font-semibold text-sm focus:ring-2 focus:ring-primary-300"
+                />
+                <button
+                  type="submit"
+                  disabled={semLoading || semQuery.trim().length < 3}
+                  className="px-4 py-2.5 rounded-xl2 bg-primary-500 text-white font-bold text-sm shadow-soft hover:bg-primary-600 transition-colors disabled:opacity-60 flex items-center gap-2 shrink-0"
+                >
+                  {semLoading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                  Search
+                </button>
+              </form>
+              {semResults !== null && (
+                <div className="mt-4 space-y-2">
+                  {semResults.length === 0 ? (
+                    <p className="text-sm font-semibold text-ink/40">No matching passages found — try different words.</p>
+                  ) : (
+                    semResults.map((r, i) => (
+                      <button
+                        key={`${r.note_id}-${i}`}
+                        onClick={() => openFromSearch(r.note_id)}
+                        disabled={semOpeningId === r.note_id}
+                        className="w-full text-left p-3 rounded-xl2 bg-primary-50/50 hover:bg-primary-50 transition-colors disabled:opacity-60"
+                      >
+                        <p className="text-xs font-bold text-primary-700 mb-1">{r.note_title}</p>
+                        <p className="text-sm font-semibold text-ink/70 line-clamp-2">{r.chunk_text}</p>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {weakTopics.length > 0 && (
             <div className="mb-8 bg-white rounded-xl2 shadow-card p-5">
@@ -153,12 +275,22 @@ export default function Dashboard() {
                     <div
                       key={b.id}
                       title={b.description}
-                      className="flex items-center gap-2 px-3 py-2 rounded-xl2 bg-white shadow-card"
+                      className="flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-xl2 bg-white shadow-card"
                     >
                       <div className={`w-8 h-8 rounded-xl2 ${bg} flex items-center justify-center ${color} shrink-0`}>
                         <Icon size={16} />
                       </div>
                       <span className="text-xs font-bold text-ink/70">{b.label}</span>
+                      <button
+                        onClick={() =>
+                          shareCard({ emoji: "🏆", title: b.label, subtitle: b.description || "Badge earned on NoteBuddy" })
+                        }
+                        title="Share this badge"
+                        aria-label={`Share ${b.label} badge`}
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-ink/30 hover:text-primary-600 hover:bg-primary-50 transition-colors shrink-0"
+                      >
+                        <Share2 size={12} />
+                      </button>
                     </div>
                   );
                 })}
@@ -280,7 +412,23 @@ export default function Dashboard() {
                   Come back tomorrow and study something new to grow your streak.
                 </p>
               </div>
-              <Flame size={22} className="ml-auto text-sun-300 shrink-0" fill="currentColor" />
+              {progress.streak > 0 && (
+                <button
+                  onClick={() =>
+                    shareCard({
+                      emoji: "🔥",
+                      title: `${progress.streak}-day streak`,
+                      subtitle: "Studying consistently with NoteBuddy",
+                    })
+                  }
+                  title="Share your streak"
+                  aria-label="Share your streak"
+                  className="ml-auto w-9 h-9 rounded-xl2 bg-white/15 hover:bg-white/25 flex items-center justify-center shrink-0 transition-colors"
+                >
+                  <Share2 size={16} />
+                </button>
+              )}
+              <Flame size={22} className={progress.streak > 0 ? "text-sun-300 shrink-0" : "ml-auto text-sun-300 shrink-0"} fill="currentColor" />
             </div>
           )}
         </motion.div>

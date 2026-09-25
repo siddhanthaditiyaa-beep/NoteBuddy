@@ -30,13 +30,14 @@ async function handle(res) {
   return res.json();
 }
 
-export async function processNote({ userId, level, text, file, quizCount = 5, language = "English", mode = "full" }) {
+export async function processNote({ userId, level, text, file, quizCount = 5, language = "English", mode = "full", board }) {
   const form = new FormData();
   form.append("user_id", userId);
   form.append("level", level);
   form.append("quiz_count", quizCount);
   form.append("language", language);
   form.append("mode", mode);
+  if (board) form.append("board", board);
   if (file) form.append("file", file);
   else form.append("text", text);
 
@@ -55,7 +56,7 @@ export async function processNote({ userId, level, text, file, quizCount = 5, la
 // rather than EventSource, because EventSource can't send our auth header
 // or a multipart body.
 export async function processNoteStream({
-  userId, level, text, file, quizCount = 5, language = "English", mode = "full", onStage,
+  userId, level, text, file, quizCount = 5, language = "English", mode = "full", board, onStage,
 }) {
   const form = new FormData();
   form.append("user_id", userId);
@@ -63,6 +64,7 @@ export async function processNoteStream({
   form.append("quiz_count", quizCount);
   form.append("language", language);
   form.append("mode", mode);
+  if (board) form.append("board", board);
   if (file) form.append("file", file);
   else form.append("text", text);
 
@@ -172,6 +174,15 @@ export async function getSharedNote(noteId) {
   return handle(res);
 }
 
+// Public, indexable gallery of every study kit its owner chose to share —
+// no auth required, powers organic search traffic (Part 4: "Biology
+// Chapter 5 flashcards" landing a stranger on NoteBuddy instead of Quizlet).
+export async function getPublicGallery(subject) {
+  const params = subject ? `?subject=${encodeURIComponent(subject)}` : "";
+  const res = await fetch(`${API_BASE}/api/notes/gallery${params}`);
+  return handle(res);
+}
+
 export async function chatAboutNotes({ rawText, question, history, language = "English" }) {
   const res = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
@@ -241,6 +252,33 @@ export async function createStudyPlan({ goal, noteIds }) {
     method: "POST",
     headers: await authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ goal, note_ids: noteIds }),
+  });
+  return handle(res);
+}
+
+export async function explainDifferently({ contextText, concept }) {
+  const res = await fetch(`${API_BASE}/api/practice/explain-differently`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ context_text: contextText, concept }),
+  });
+  return handle(res);
+}
+
+export async function gradeShortAnswer({ contextText, question, studentAnswer }) {
+  const res = await fetch(`${API_BASE}/api/practice/grade-answer`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ context_text: contextText, question, student_answer: studentAnswer }),
+  });
+  return handle(res);
+}
+
+export async function searchNotes(query) {
+  const res = await fetch(`${API_BASE}/api/notes/search`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ query }),
   });
   return handle(res);
 }

@@ -287,6 +287,7 @@ export default function Upload() {
         mode: cramMode ? "cram" : "full",
         text: mode === "audio" ? undefined : effectiveText,
         file: mode === "audio" ? file : undefined,
+        board: user?.user_metadata?.board,
         onStage: setStage,
       });
       sessionStorage.setItem("notebuddy_last_result", JSON.stringify(result));

@@ -35,6 +35,7 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [studySubject, setStudySubject] = useState("");
   const [studyGoal, setStudyGoal] = useState("");
+  const [board, setBoard] = useState("");
   const [loading, setLoading] = useState(false);
   const passwordRef = useRef(null);
 
@@ -48,6 +49,7 @@ export default function Signup() {
     const { error } = await signUp(email, password, {
       study_subject: studySubject.trim() || undefined,
       study_goal: studyGoal || undefined,
+      board: board || undefined,
     });
     setLoading(false);
     if (error) toast.error(error.message);
@@ -153,6 +155,24 @@ export default function Signup() {
             </button>
           ))}
         </div>
+
+        <label className="block text-sm font-bold text-ink/70 mb-1">
+          Board / exam <span className="font-semibold text-ink/40">(optional)</span>
+        </label>
+        <select
+          value={board}
+          onChange={(e) => setBoard(e.target.value)}
+          className="w-full mb-6 px-4 py-2.5 rounded-xl2 bg-primary-50 outline-none font-semibold focus:ring-2 focus:ring-primary-300"
+        >
+          <option value="">Skip</option>
+          <option value="CBSE">CBSE</option>
+          <option value="ICSE">ICSE</option>
+          <option value="State Board">State Board</option>
+          <option value="JEE">JEE</option>
+          <option value="NEET">NEET</option>
+          <option value="IB">IB</option>
+          <option value="Other">Other</option>
+        </select>
 
         <button
           type="submit"

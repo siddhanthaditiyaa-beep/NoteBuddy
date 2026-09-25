@@ -23,8 +23,24 @@ export default function SharedNote() {
 
   useEffect(() => {
     getSharedNote(noteId)
-      .then(setNote)
+      .then((n) => {
+        setNote(n);
+        // Crawlable per-page title + description (Part 4: a public gallery
+        // only compounds into organic search traffic if each shared kit's
+        // own page carries real SEO metadata, not just a generic title).
+        document.title = `${n.study_kit?.title || "Study kit"} — NoteBuddy`;
+        let meta = document.querySelector('meta[name="description"]');
+        if (!meta) {
+          meta = document.createElement("meta");
+          meta.name = "description";
+          document.head.appendChild(meta);
+        }
+        meta.content = (n.study_kit?.summary || "A free AI-generated study kit from NoteBuddy.").slice(0, 155);
+      })
       .catch((e) => setError(e.message || "Couldn't load this study kit."));
+    return () => {
+      document.title = "NoteBuddy";
+    };
   }, [noteId]);
 
   if (error) {
@@ -58,9 +74,14 @@ export default function SharedNote() {
           <Link to="/" className="font-display font-extrabold text-lg text-primary-600">
             NoteBuddy
           </Link>
-          <Link to="/signup" className="text-xs font-bold text-primary-600 hover:underline">
-            Make your own study kit →
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link to="/gallery" className="text-xs font-bold text-ink/50 hover:text-primary-600 hover:underline">
+              Browse more
+            </Link>
+            <Link to="/signup" className="text-xs font-bold text-primary-600 hover:underline">
+              Make your own study kit →
+            </Link>
+          </div>
         </div>
       </div>
 

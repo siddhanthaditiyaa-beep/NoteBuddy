@@ -7,6 +7,7 @@ from app.rate_limit import limiter
 from app.config import MAX_UPLOAD_MB, MAX_AUDIO_MB, DAILY_GENERATION_LIMIT
 from app.services.extraction import extract_text
 from app.services.youtube_service import get_transcript_text, YouTubeImportError
+from app.services.embeddings_service import embed_and_store_note, search_notes
 from app.services.gemini_service import generate_study_kit, transcribe_audio, AIGenerationError
 from app.services import supabase_client
 from app.services.supabase_client import DailyLimitExceeded
@@ -28,13 +29,15 @@ def _enforce_daily_cap(user_id: str):
 
 
 def _generate_with_cache(
-    source_text: str, level: str, quiz_count: int, language: str, mode: str, weak_topics: list[str] | None = None
+    source_text: str, level: str, quiz_count: int, language: str, mode: str,
+    weak_topics: list[str] | None = None, board: str | None = None,
 ) -> dict:
     """Serves a cached study kit for identical input instead of re-calling
     Gemini, saving quota on duplicate uploads/re-combines. Weak-topic-biased
-    regenerations are never cached (they're personalized, not reusable)."""
+    or board-tailored regenerations are never cached (they're personalized,
+    not reusable across students)."""
     cache_key = None
-    if not weak_topics:
+    if not weak_topics and not board:
         try:
             cache_key = supabase_client.make_cache_key(source_text, level, quiz_count, language, mode)
             cached = supabase_client.get_cached_study_kit(cache_key)
@@ -45,7 +48,8 @@ def _generate_with_cache(
 
     try:
         study_kit = generate_study_kit(
-            source_text, level=level, quiz_count=quiz_count, language=language, mode=mode, weak_topics=weak_topics
+            source_text, level=level, quiz_count=quiz_count, language=language, mode=mode,
+            weak_topics=weak_topics, board=board,
         )
     except AIGenerationError:
         raise HTTPException(502, "NoteBuddy's AI is having trouble right now — please try again in a moment.")
@@ -119,6 +123,7 @@ async def process_note(
     quiz_count: int = Form(5),
     language: str = Form("English"),
     mode: str = Form("full"),
+    board: str | None = Form(None),
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Accepts either pasted text OR an uploaded file (PDF/image/audio), runs
@@ -158,7 +163,7 @@ async def process_note(
         )
 
     _enforce_daily_cap(user_id)
-    study_kit = _generate_with_cache(source_text, level, quiz_count, language, mode)
+    study_kit = _generate_with_cache(source_text, level, quiz_count, language, mode, board=board)
 
     saved = None
     try:
@@ -169,6 +174,11 @@ async def process_note(
             study_kit=study_kit,
         )
         supabase_client.award_xp(user_id, amount=10)
+        if saved:
+            try:
+                embed_and_store_note(saved["id"], user_id, source_text)
+            except Exception:
+                pass  # semantic search is a bonus feature — never block a note save over it
     except RuntimeError:
         # Supabase not configured yet — still return the study kit so the
         # app works locally before the DB is wired up.
@@ -183,7 +193,7 @@ def _sse(stage: str, **extra) -> str:
 
 async def _process_stream_generator(
     user_id: str, level: str, text: str | None, file: UploadFile | None,
-    quiz_count: int, language: str, mode: str,
+    quiz_count: int, language: str, mode: str, board: str | None = None,
 ):
     """Same work as /process, but reports real stages as it goes (extracting
     -> generating -> saving -> done) instead of the frontend showing one
@@ -235,7 +245,7 @@ async def _process_stream_generator(
 
         yield _sse("generating")
         try:
-            study_kit = _generate_with_cache(source_text, level, quiz_count, language, mode)
+            study_kit = _generate_with_cache(source_text, level, quiz_count, language, mode, board=board)
         except HTTPException as e:
             yield _sse("error", message=str(e.detail))
             return
@@ -247,6 +257,11 @@ async def _process_stream_generator(
                 user_id=user_id, title=study_kit.get("title", "Untitled note"), raw_text=source_text, study_kit=study_kit
             )
             supabase_client.award_xp(user_id, amount=10)
+            if saved:
+                try:
+                    embed_and_store_note(saved["id"], user_id, source_text)
+                except Exception:
+                    pass
         except RuntimeError:
             pass
 
@@ -268,12 +283,13 @@ async def process_note_stream(
     quiz_count: int = Form(5),
     language: str = Form("English"),
     mode: str = Form("full"),
+    board: str | None = Form(None),
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Same request shape as /process, but streamed as Server-Sent Events
     (one 'data: {...}' line per stage) instead of one final JSON blob."""
     return StreamingResponse(
-        _process_stream_generator(current_user.id, level, text, file, quiz_count, language, mode),
+        _process_stream_generator(current_user.id, level, text, file, quiz_count, language, mode, board),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -357,6 +373,40 @@ async def get_public_note(note_id: str):
     if not note:
         raise HTTPException(404, "This study kit isn't shared (or doesn't exist).")
     return note
+
+
+class SearchRequest(BaseModel):
+    query: str
+
+
+@router.post("/search")
+@limiter.limit("20/minute")
+async def semantic_search(
+    request: Request, req: SearchRequest, current_user: CurrentUser = Depends(get_current_user)
+):
+    """'Which of my notes mentioned mitochondria?' — semantic search across
+    everything this student has saved, via free Gemini embeddings + pgvector."""
+    if not req.query or len(req.query.strip()) < 3:
+        raise HTTPException(400, "Type a bit more to search for.")
+    try:
+        results = search_notes(current_user.id, req.query.strip())
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    except Exception:
+        raise HTTPException(502, "Search isn't available right now — please try again in a moment.")
+    return {"results": results}
+
+
+@router.get("/gallery")
+async def public_gallery(subject: str | None = None):
+    """No auth required — a public, browsable/indexable gallery of every
+    study kit its owner chose to share. Defined before the /{note_id}
+    catch-all route so 'gallery' is never mistaken for a note ID."""
+    try:
+        notes = supabase_client.list_public_notes(subject=subject)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    return {"notes": notes}
 
 
 @router.get("/{note_id}")

@@ -17,11 +17,14 @@ import {
   Target,
   Copy,
   Check,
+  PenLine,
+  Headphones,
 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import FlashcardDeck from "../components/FlashcardDeck";
 import Quiz from "../components/Quiz";
 import ChatPanel from "../components/ChatPanel";
+import PracticeMode from "../components/PracticeMode";
 import LevelSlider from "../components/LevelSlider";
 import { useAuth } from "../context/AuthContext";
 import { regenerateNote, shareNote, recordQuizAnswer } from "../lib/api";
@@ -48,10 +51,28 @@ const SPEECH_LANG_MAP = {
 const TABS = [
   { id: "summary", label: "Summary", icon: BookOpen },
   { id: "flashcards", label: "Flashcards", icon: Layers },
+  { id: "practice", label: "Practice", icon: PenLine },
   { id: "quiz", label: "Quiz", icon: ListChecks },
   { id: "mindmap", label: "Mind Map", icon: GitBranch },
   { id: "chat", label: "Ask NoteBuddy", icon: MessageCircle },
 ];
+
+// Walks the read-aloud through the whole kit — summary, then key terms,
+// then flashcard Q&As — instead of just the summary paragraph, so it works
+// as an actual "study podcast" a learner can listen to hands-free.
+function buildPodcastScript(studyKit) {
+  const parts = [];
+  if (studyKit.summary) parts.push(studyKit.summary);
+  if (studyKit.key_terms?.length) {
+    parts.push("Key terms.");
+    studyKit.key_terms.forEach((kt) => parts.push(`${kt.term}. ${kt.definition}.`));
+  }
+  if (studyKit.flashcards?.length) {
+    parts.push("Now, flashcards.");
+    studyKit.flashcards.forEach((fc, i) => parts.push(`Question ${i + 1}. ${fc.front}... Answer: ${fc.back}.`));
+  }
+  return parts.join(" ");
+}
 
 export default function Results() {
   const { user } = useAuth();
@@ -79,7 +100,9 @@ export default function Results() {
     };
   }, []);
 
-  const toggleSpeak = () => {
+  const [speakMode, setSpeakMode] = useState(null); // "summary" | "podcast" | null
+
+  const toggleSpeak = (mode = "summary") => {
     if (!("speechSynthesis" in window)) {
       toast.error("Your browser doesn't support read-aloud.");
       return;
@@ -87,9 +110,14 @@ export default function Results() {
     if (speaking) {
       window.speechSynthesis.cancel();
       setSpeaking(false);
-      return;
+      setSpeakMode(null);
+      // If a different mode was requested while one was already playing,
+      // stopping is enough for this click — the learner can press again to
+      // start the new mode, rather than us auto-chaining into it.
+      if (speakMode === mode) return;
     }
-    const utterance = new SpeechSynthesisUtterance(studyKit.summary || "");
+    const text = mode === "podcast" ? buildPodcastScript(studyKit) : studyKit.summary || "";
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 1;
     const langTag = SPEECH_LANG_MAP[language] || "en-US";
     utterance.lang = langTag;
@@ -107,11 +135,18 @@ export default function Results() {
         icon: "🔊",
       });
     }
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => setSpeaking(false);
+    utterance.onend = () => {
+      setSpeaking(false);
+      setSpeakMode(null);
+    };
+    utterance.onerror = () => {
+      setSpeaking(false);
+      setSpeakMode(null);
+    };
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
     setSpeaking(true);
+    setSpeakMode(mode);
   };
 
   const downloadPdf = () => {
@@ -296,12 +331,20 @@ export default function Results() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={toggleSpeak}
-                title={speaking ? "Stop reading" : "Read summary aloud"}
-                aria-label={speaking ? "Stop reading" : "Read summary aloud"}
+                onClick={() => toggleSpeak("summary")}
+                title={speaking && speakMode === "summary" ? "Stop reading" : "Read summary aloud"}
+                aria-label={speaking && speakMode === "summary" ? "Stop reading" : "Read summary aloud"}
                 className="w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors"
               >
-                {speaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                {speaking && speakMode === "summary" ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
+              <button
+                onClick={() => toggleSpeak("podcast")}
+                title={speaking && speakMode === "podcast" ? "Stop study podcast" : "Listen to the full study podcast (summary + terms + flashcards)"}
+                aria-label={speaking && speakMode === "podcast" ? "Stop study podcast" : "Listen to full study podcast"}
+                className="w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors"
+              >
+                <Headphones size={16} className={speaking && speakMode === "podcast" ? "text-primary-600" : ""} />
               </button>
               <button
                 onClick={downloadPdf}
@@ -397,7 +440,12 @@ export default function Results() {
                 )}
                 {tab === "flashcards" && (
                   <div className="bg-white rounded-xl2 shadow-card p-8">
-                    <FlashcardDeck cards={studyKit.flashcards} />
+                    <FlashcardDeck cards={studyKit.flashcards} rawText={rawText} />
+                  </div>
+                )}
+                {tab === "practice" && (
+                  <div className="bg-white rounded-xl2 shadow-card p-8">
+                    <PracticeMode cards={studyKit.flashcards} rawText={rawText} />
                   </div>
                 )}
                 {tab === "quiz" && (

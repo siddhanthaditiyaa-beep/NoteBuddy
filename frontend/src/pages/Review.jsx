@@ -1,11 +1,109 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
-import { Brain, CheckCircle2, RotateCcw } from "lucide-react";
+import { Brain, CheckCircle2, RotateCcw, Timer, Pause, Play, SkipForward } from "lucide-react";
 import NavBar from "../components/NavBar";
 import { useAuth } from "../context/AuthContext";
 import { getDueCards, gradeCard, listNotes } from "../lib/api";
+
+const FOCUS_SECONDS = 25 * 60;
+const BREAK_SECONDS = 5 * 60;
+
+function formatClock(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
+  const s = Math.floor(totalSeconds % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+// A classic Pomodoro focus/break timer, self-contained so it can sit next to
+// review without touching any review state. Ticks down purely on the
+// client — no backend call, nothing to persist — and hands off between a
+// 25-minute focus block and a 5-minute break automatically.
+function PomodoroTimer() {
+  const [mode, setMode] = useState("focus"); // "focus" | "break"
+  const [secondsLeft, setSecondsLeft] = useState(FOCUS_SECONDS);
+  const [running, setRunning] = useState(false);
+  const intervalRef = useRef(null);
+
+  useEffect(() => {
+    if (!running) return;
+    intervalRef.current = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          const nextMode = mode === "focus" ? "break" : "focus";
+          toast.success(nextMode === "break" ? "Focus block done — take a 5-minute break! 🌿" : "Break's over — back to it! 🔥");
+          setMode(nextMode);
+          return nextMode === "break" ? BREAK_SECONDS : FOCUS_SECONDS;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(intervalRef.current);
+  }, [running, mode]);
+
+  const total = mode === "focus" ? FOCUS_SECONDS : BREAK_SECONDS;
+  const progress = 1 - secondsLeft / total;
+
+  const skip = () => {
+    const nextMode = mode === "focus" ? "break" : "focus";
+    setMode(nextMode);
+    setSecondsLeft(nextMode === "break" ? BREAK_SECONDS : FOCUS_SECONDS);
+  };
+
+  const reset = () => {
+    setRunning(false);
+    setMode("focus");
+    setSecondsLeft(FOCUS_SECONDS);
+  };
+
+  return (
+    <div className="mb-6 bg-white rounded-xl2 shadow-card p-5">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className={`w-11 h-11 rounded-xl2 flex items-center justify-center shrink-0 ${mode === "focus" ? "bg-primary-50 text-primary-500" : "bg-mint-50 text-mint-500"}`}>
+            <Timer size={20} />
+          </div>
+          <div>
+            <p className="font-display text-2xl font-bold leading-none tabular-nums">{formatClock(secondsLeft)}</p>
+            <p className="text-xs font-bold text-ink/40 mt-1">{mode === "focus" ? "Focus block" : "Short break"}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setRunning((r) => !r)}
+            aria-label={running ? "Pause timer" : "Start timer"}
+            className="w-10 h-10 rounded-xl2 bg-primary-500 text-white flex items-center justify-center shadow-soft hover:bg-primary-600 transition-colors"
+          >
+            {running ? <Pause size={16} /> : <Play size={16} />}
+          </button>
+          <button
+            onClick={skip}
+            aria-label={mode === "focus" ? "Skip to break" : "Skip to focus"}
+            title={mode === "focus" ? "Skip to break" : "Skip to focus"}
+            className="w-10 h-10 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors"
+          >
+            <SkipForward size={16} />
+          </button>
+          <button
+            onClick={reset}
+            aria-label="Reset timer"
+            title="Reset timer"
+            className="w-10 h-10 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors"
+          >
+            <RotateCcw size={16} />
+          </button>
+        </div>
+      </div>
+      <div className="mt-4 h-2 rounded-full bg-primary-50 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${mode === "focus" ? "bg-primary-500" : "bg-mint-500"}`}
+          style={{ width: `${Math.min(100, progress * 100)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
 // Maps the four learner-facing buttons to the 0-5 SM-2 quality scale.
 const GRADES = [
@@ -73,6 +171,8 @@ export default function Review() {
             <Brain size={16} /> Spaced-repetition review
           </div>
           <h1 className="font-display text-3xl font-extrabold mb-4">Review your flashcards</h1>
+
+          <PomodoroTimer />
 
           {notes.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-6">

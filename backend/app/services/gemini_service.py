@@ -91,6 +91,22 @@ def _language_instruction(language: str) -> str:
     )
 
 
+# A student can type anything into the (optional) board/exam field, so this
+# is a starter list for the UI, not a hard allowlist.
+SUPPORTED_BOARDS = ["CBSE", "ICSE", "State Board", "JEE", "NEET", "IB", "Other"]
+
+
+def _board_instruction(board: str | None) -> str:
+    if not board or not board.strip():
+        return ""
+    return (
+        f"\nThis student is preparing under the {board.strip()} curriculum/exam. Where it's natural, "
+        f"match the phrasing, question style, and level of detail typically expected for {board.strip()} "
+        f"(e.g. mark-scheme-style wording, typical question format) — but don't force board-specific "
+        f"jargon into material that doesn't call for it."
+    )
+
+
 def _weak_topics_instruction(weak_topics: list[str] | None) -> str:
     if not weak_topics:
         return ""
@@ -110,6 +126,7 @@ def generate_study_kit(
     language: str = "English",
     mode: str = "full",
     weak_topics: list[str] | None = None,
+    board: str | None = None,
 ) -> dict:
     """One call that produces the full study kit: summary, key terms,
     flashcards, and a quiz — all tailored to the requested reading level.
@@ -122,6 +139,7 @@ def generate_study_kit(
     quiz_count = quiz_count if quiz_count in (5, 10, 15, 20) else 5
     language_instruction = _language_instruction(language)
     weak_instruction = _weak_topics_instruction(weak_topics)
+    board_instruction = _board_instruction(board)
 
     if mode == "cram":
         quiz_count = 5
@@ -144,6 +162,7 @@ def generate_study_kit(
 {mode_instruction}
 {language_instruction}
 {weak_instruction}
+{board_instruction}
 
 Given the study material below, produce a JSON object with EXACTLY this shape and nothing else (no markdown fences, no commentary):
 
@@ -238,6 +257,57 @@ Reply as NoteBuddy:"""
         return response.text.strip()
     except Exception as e:
         raise AIGenerationError(f"Chat reply failed: {e}")
+
+
+def explain_differently(context_text: str, concept: str) -> str:
+    """Tiny, cheap call — re-explains ONE concept with a different analogy
+    instead of regenerating the whole kit. Directly answers the single most
+    common study moment: 'I didn't get it explained that way.'"""
+    prompt = f"""You are NoteBuddy, a friendly AI tutor. A student didn't fully get this concept when it was explained the first way. Re-explain it using a DIFFERENT analogy or approach than a typical textbook definition — something vivid and concrete that makes it click. Keep it to 2-4 sentences.
+
+BACKGROUND MATERIAL (for context only, don't just repeat it):
+\"\"\"
+{context_text[:4000]}
+\"\"\"
+
+CONCEPT TO RE-EXPLAIN:
+\"\"\"
+{concept[:1000]}
+\"\"\"
+
+Give ONLY the new explanation, no preamble like "Sure!" or "Here's another way":"""
+    try:
+        response = _model().generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        raise AIGenerationError(f"Re-explanation failed: {e}")
+
+
+def grade_short_answer(context_text: str, question: str, student_answer: str) -> dict:
+    """Grades a typed answer against the source material — stronger for
+    retention than multiple choice alone, since the student has to produce
+    the answer, not just recognize it."""
+    prompt = f"""You are NoteBuddy, a friendly AI tutor grading a student's short-answer response. Be encouraging but honest — don't just say everything is correct.
+
+SOURCE MATERIAL:
+\"\"\"
+{context_text[:6000]}
+\"\"\"
+
+QUESTION:
+{question}
+
+STUDENT'S ANSWER:
+\"\"\"
+{student_answer[:1000]}
+\"\"\"
+
+Respond with ONLY a JSON object in exactly this shape (no markdown fences, no commentary):
+{{
+  "verdict": "correct" | "partially_correct" | "incorrect",
+  "feedback": "2-3 encouraging but honest sentences: what they got right, and specifically what's missing or wrong, grounded in the source material"
+}}"""
+    return _call_gemini_json(prompt, {"verdict", "feedback"}, max_attempts=2)
 
 
 def regenerate_at_level(text: str, level: str, quiz_count: int = 5) -> dict:

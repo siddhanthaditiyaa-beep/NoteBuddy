@@ -38,6 +38,10 @@ def save_note(user_id: str, title: str, raw_text: str, study_kit: dict, subject:
         "raw_text": raw_text,
         "study_kit": study_kit,
         "subject": subject or study_kit.get("subject") or "General",
+        # Stored at write time (not computed on every dashboard load) so the
+        # "time saved" stat is one cheap SUM over already-saved numbers,
+        # not a raw_text scan across every note the student has ever made.
+        "word_count": len((raw_text or "").split()),
     }).execute()
     return result.data[0] if result.data else {}
 
@@ -46,11 +50,30 @@ def list_notes(user_id: str) -> list[dict]:
     client = get_client()
     result = (
         client.table("notes")
-        .select("id, title, subject, created_at")
+        .select("id, title, subject, created_at, word_count")
         .eq("user_id", user_id)
         .order("created_at", desc=True)
         .execute()
     )
+    return result.data or []
+
+
+def list_public_notes(limit: int = 50, subject: str | None = None) -> list[dict]:
+    """Powers the public, indexable gallery of shared study kits (Part 4:
+    a search like 'Biology Chapter 5 flashcards' should be able to land a
+    stranger on NoteBuddy). Only ever returns notes the owner explicitly
+    made public — same is_public flag the private share-link flow uses."""
+    client = get_client()
+    query = (
+        client.table("notes")
+        .select("id, title, subject, created_at")
+        .eq("is_public", True)
+        .order("created_at", desc=True)
+        .limit(limit)
+    )
+    if subject:
+        query = query.eq("subject", subject)
+    result = query.execute()
     return result.data or []
 
 
