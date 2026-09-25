@@ -36,3 +36,20 @@ async def grade_card(req: GradeRequest, current_user: CurrentUser = Depends(get_
     except RuntimeError as e:
         raise HTTPException(503, str(e))
     return result
+
+
+class QuizAnswerRequest(BaseModel):
+    topic: str
+    correct: bool
+
+
+@router.post("/quiz-answer")
+async def record_quiz_answer(req: QuizAnswerRequest, current_user: CurrentUser = Depends(get_current_user)):
+    """Feeds the weak-topic tracker — every quiz answer nudges a per-topic
+    correct/wrong counter, used later to bias regeneration and Exam Cram
+    Mode toward what this student actually struggles with."""
+    try:
+        supabase_client.record_quiz_answer(current_user.id, req.topic, req.correct)
+    except RuntimeError:
+        pass  # Supabase not configured yet — fail silently, this is best-effort
+    return {"status": "ok"}

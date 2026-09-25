@@ -1,11 +1,15 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: "class",
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
     extend: {
       colors: {
-        ink: "#151429",
-        cloud: "#F7F6FB",
+        // Driven by CSS variables (see index.css) so every text-ink/NN and
+        // bg-cloud/NN utility — including opacity variants — flips for free
+        // when the "dark" class toggles, without editing every component.
+        ink: "rgb(var(--color-ink) / <alpha-value>)",
+        cloud: "rgb(var(--color-cloud) / <alpha-value>)",
         primary: {
           50: "#F1EEFF",
           100: "#E3DEFF",

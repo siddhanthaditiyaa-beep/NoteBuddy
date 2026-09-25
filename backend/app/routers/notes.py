@@ -24,11 +24,67 @@ def _enforce_daily_cap(user_id: str):
         pass  # Supabase not configured yet — don't block local dev
 
 
-def _run_generation(source_text: str, level: str, quiz_count: int) -> dict:
+def _generate_with_cache(
+    source_text: str, level: str, quiz_count: int, language: str, mode: str, weak_topics: list[str] | None = None
+) -> dict:
+    """Serves a cached study kit for identical input instead of re-calling
+    Gemini, saving quota on duplicate uploads/re-combines. Weak-topic-biased
+    regenerations are never cached (they're personalized, not reusable)."""
+    cache_key = None
+    if not weak_topics:
+        try:
+            cache_key = supabase_client.make_cache_key(source_text, level, quiz_count, language, mode)
+            cached = supabase_client.get_cached_study_kit(cache_key)
+            if cached:
+                return cached
+        except RuntimeError:
+            pass
+
     try:
-        return generate_study_kit(source_text, level=level, quiz_count=quiz_count)
-    except AIGenerationError as e:
+        study_kit = generate_study_kit(
+            source_text, level=level, quiz_count=quiz_count, language=language, mode=mode, weak_topics=weak_topics
+        )
+    except AIGenerationError:
         raise HTTPException(502, "NoteBuddy's AI is having trouble right now — please try again in a moment.")
+
+    if cache_key:
+        try:
+            supabase_client.save_cached_study_kit(cache_key, study_kit)
+        except RuntimeError:
+            pass
+    return study_kit
+
+
+@router.post("/extract")
+@limiter.limit("20/minute")
+async def extract_only(
+    request: Request,
+    files: list[UploadFile] = File(...),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Extraction only (OCR/PDF text) — no Gemini call involved, so this is
+    completely free. Powers the "review before you generate" step: multiple
+    photographed pages of one note come in here, get joined in order, and
+    go back as one editable block of text before anything is spent on AI."""
+    if not files:
+        raise HTTPException(400, "No files provided.")
+
+    texts = []
+    for f in files:
+        filename_lower = f.filename.lower()
+        if filename_lower.endswith(AUDIO_EXTENSIONS):
+            raise HTTPException(400, "Audio clips go through the record/upload flow, not text extraction.")
+        if not filename_lower.endswith(DOC_EXTENSIONS):
+            raise HTTPException(415, f"'{f.filename}' isn't a supported type — use a PDF or image.")
+
+        raw_bytes = await f.read()
+        if len(raw_bytes) > MAX_UPLOAD_MB * 1024 * 1024:
+            raise HTTPException(413, f"'{f.filename}' is too large — please keep each file under {MAX_UPLOAD_MB:.0f}MB.")
+
+        texts.append(extract_text(f.filename, raw_bytes))
+
+    combined = "\n\n--- page break ---\n\n".join(t for t in texts if t and t.strip())
+    return {"text": combined, "pages": len(files)}
 
 
 @router.post("/process")
@@ -39,6 +95,8 @@ async def process_note(
     text: str | None = Form(None),
     file: UploadFile | None = File(None),
     quiz_count: int = Form(5),
+    language: str = Form("English"),
+    mode: str = Form("full"),
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Accepts either pasted text OR an uploaded file (PDF/image/audio), runs
@@ -78,7 +136,7 @@ async def process_note(
         )
 
     _enforce_daily_cap(user_id)
-    study_kit = _run_generation(source_text, level, quiz_count)
+    study_kit = _generate_with_cache(source_text, level, quiz_count, language, mode)
 
     saved = None
     try:
@@ -94,13 +152,14 @@ async def process_note(
         # app works locally before the DB is wired up.
         pass
 
-    return {"note": saved, "study_kit": study_kit, "raw_text": source_text}
+    return {"note": saved, "study_kit": study_kit, "raw_text": source_text, "language": language, "mode": mode}
 
 
 class CombineRequest(BaseModel):
     note_ids: list[str]
     level: str = "beginner"
     quiz_count: int = 5
+    language: str = "English"
 
 
 @router.post("/combine")
@@ -134,7 +193,7 @@ async def combine_notes(
 
     combined_text = "\n\n".join(sections)
     _enforce_daily_cap(user_id)
-    study_kit = _run_generation(combined_text, req.level, req.quiz_count)
+    study_kit = _generate_with_cache(combined_text, req.level, req.quiz_count, req.language, "full")
     study_kit["title"] = f"Combined review: {', '.join(titles[:3])}" + (
         f" +{len(titles) - 3} more" if len(titles) > 3 else ""
     )
@@ -163,6 +222,19 @@ async def list_notes(current_user: CurrentUser = Depends(get_current_user)):
         raise HTTPException(503, str(e))
 
 
+@router.get("/public/{note_id}")
+async def get_public_note(note_id: str):
+    """No auth required — this is the whole point of a shareable link. Only
+    ever returns a note the owner explicitly marked public."""
+    try:
+        note = supabase_client.get_public_note(note_id)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    if not note:
+        raise HTTPException(404, "This study kit isn't shared (or doesn't exist).")
+    return note
+
+
 @router.get("/{note_id}")
 async def get_note(note_id: str, current_user: CurrentUser = Depends(get_current_user)):
     try:
@@ -174,6 +246,25 @@ async def get_note(note_id: str, current_user: CurrentUser = Depends(get_current
     return note
 
 
+class ShareRequest(BaseModel):
+    is_public: bool = True
+
+
+@router.post("/{note_id}/share")
+async def share_note(
+    note_id: str, req: ShareRequest, current_user: CurrentUser = Depends(get_current_user)
+):
+    """Toggles a note's public/private share link. Only the owner (verified
+    via their session token) can flip this."""
+    try:
+        updated = supabase_client.set_note_public(current_user.id, note_id, req.is_public)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    if not updated:
+        raise HTTPException(404, "Note not found")
+    return {"note_id": note_id, "is_public": req.is_public}
+
+
 @router.post("/{note_id}/regenerate")
 @limiter.limit("10/minute")
 async def regenerate_note(
@@ -181,6 +272,8 @@ async def regenerate_note(
     note_id: str,
     level: str = Form(...),
     quiz_count: int = Form(5),
+    language: str = Form("English"),
+    use_weak_topics: bool = Form(False),
     current_user: CurrentUser = Depends(get_current_user),
 ):
     user_id = current_user.id
@@ -191,6 +284,13 @@ async def regenerate_note(
     if not note:
         raise HTTPException(404, "Note not found")
 
+    weak_topics = None
+    if use_weak_topics:
+        try:
+            weak_topics = [t["term"] for t in supabase_client.get_weak_topics(user_id)]
+        except RuntimeError:
+            weak_topics = None
+
     _enforce_daily_cap(user_id)
-    study_kit = _run_generation(note["raw_text"], level, quiz_count)
+    study_kit = _generate_with_cache(note["raw_text"], level, quiz_count, language, "full", weak_topics)
     return {"study_kit": study_kit}

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2, XCircle, Trophy } from "lucide-react";
 
-export default function Quiz({ questions = [] }) {
+export default function Quiz({ questions = [], onAnswer }) {
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState(null);
   const [score, setScore] = useState(0);
@@ -47,7 +47,12 @@ export default function Quiz({ questions = [] }) {
   const choose = (i) => {
     if (selected !== null) return;
     setSelected(i);
-    if (i === q.correct_index) setScore((s) => s + 1);
+    const isCorrect = i === q.correct_index;
+    if (isCorrect) setScore((s) => s + 1);
+    // Feeds the weak-topic tracker on the dashboard — only sent when the
+    // question actually has a topic (older cached study kits from before
+    // this feature won't, so those just don't record anything).
+    if (onAnswer && q.topic) onAnswer({ topic: q.topic, correct: isCorrect });
   };
 
   const next = () => {

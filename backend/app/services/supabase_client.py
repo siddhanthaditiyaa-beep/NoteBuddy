@@ -3,6 +3,7 @@ gamification state (XP + streak). Using the service role key here because
 this all runs server-side; the frontend never sees this key.
 """
 
+import hashlib
 from datetime import datetime, timedelta, timezone
 from supabase import create_client, Client
 from app.config import SUPABASE_URL, SUPABASE_SERVICE_KEY
@@ -284,3 +285,112 @@ def get_badges(notes_count: int, streak: int) -> list[dict]:
         elif "min_streak" in b and streak >= b["min_streak"]:
             earned.append({"id": b["id"], "label": b["label"], "description": b["description"]})
     return earned
+
+
+# ---------------------------------------------------------------------------
+# Study-kit caching — same input (text + level + quiz count + language +
+# mode) is hashed and cached, so re-uploading or re-combining identical
+# content serves the cached result instead of burning another Gemini call.
+# ---------------------------------------------------------------------------
+
+
+def make_cache_key(text: str, level: str, quiz_count: int, language: str, mode: str) -> str:
+    raw = f"{text.strip()}|{level}|{quiz_count}|{language}|{mode}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def get_cached_study_kit(cache_key: str) -> dict | None:
+    client = get_client()
+    result = (
+        client.table("study_kit_cache").select("study_kit").eq("text_hash", cache_key).maybe_single().execute()
+    )
+    return result.data["study_kit"] if result and result.data else None
+
+
+def save_cached_study_kit(cache_key: str, study_kit: dict) -> None:
+    client = get_client()
+    client.table("study_kit_cache").upsert({"text_hash": cache_key, "study_kit": study_kit}).execute()
+
+
+# ---------------------------------------------------------------------------
+# Weak-topic tracking — every graded quiz answer nudges a per-user,
+# per-term correct/wrong counter. Regeneration and Exam Cram Mode can then
+# ask Gemini to emphasize whatever a student is genuinely weak on, instead
+# of the app just tracking XP with no real learning signal behind it.
+# ---------------------------------------------------------------------------
+
+
+def record_quiz_answer(user_id: str, topic: str, correct: bool) -> None:
+    topic = (topic or "").strip()
+    if not topic:
+        return
+    client = get_client()
+    existing = (
+        client.table("topic_progress")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("term", topic)
+        .maybe_single()
+        .execute()
+    )
+    row = existing.data if existing and existing.data else None
+    if row is None:
+        client.table("topic_progress").insert({
+            "user_id": user_id,
+            "term": topic,
+            "correct_count": 1 if correct else 0,
+            "wrong_count": 0 if correct else 1,
+        }).execute()
+        return
+    field = "correct_count" if correct else "wrong_count"
+    client.table("topic_progress").update({
+        field: (row.get(field) or 0) + 1,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("user_id", user_id).eq("term", topic).execute()
+
+
+def get_weak_topics(user_id: str, limit: int = 5) -> list[dict]:
+    """Topics with at least one wrong answer and more misses than hits,
+    worst-first — these are what Exam Cram Mode / regeneration lean on."""
+    client = get_client()
+    result = (
+        client.table("topic_progress")
+        .select("term, correct_count, wrong_count")
+        .eq("user_id", user_id)
+        .gt("wrong_count", 0)
+        .execute()
+    )
+    rows = result.data or []
+    weak = [r for r in rows if r["wrong_count"] >= r.get("correct_count", 0)]
+    weak.sort(key=lambda r: r["wrong_count"] - r.get("correct_count", 0), reverse=True)
+    return weak[:limit]
+
+
+# ---------------------------------------------------------------------------
+# Shareable, public, read-only study-kit links.
+# ---------------------------------------------------------------------------
+
+
+def set_note_public(user_id: str, note_id: str, is_public: bool) -> dict | None:
+    client = get_client()
+    result = (
+        client.table("notes")
+        .update({"is_public": is_public})
+        .eq("user_id", user_id)
+        .eq("id", note_id)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
+def get_public_note(note_id: str) -> dict | None:
+    client = get_client()
+    result = (
+        client.table("notes")
+        .select("id, title, subject, study_kit, created_at")
+        .eq("id", note_id)
+        .eq("is_public", True)
+        .maybe_single()
+        .execute()
+    )
+    return result.data

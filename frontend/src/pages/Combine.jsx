@@ -6,6 +6,7 @@ import { Layers, Wand2, CheckSquare, Square } from "lucide-react";
 import NavBar from "../components/NavBar";
 import LevelSlider from "../components/LevelSlider";
 import QuizCountSlider from "../components/QuizCountSlider";
+import LanguageSelector from "../components/LanguageSelector";
 import { useAuth } from "../context/AuthContext";
 import { listNotes, combineNotes } from "../lib/api";
 
@@ -17,6 +18,7 @@ export default function Combine() {
   const [selected, setSelected] = useState([]);
   const [level, setLevel] = useState("beginner");
   const [quizCount, setQuizCount] = useState(5);
+  const [language, setLanguage] = useState("English");
   const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function Combine() {
     }
     setGenerating(true);
     try {
-      const result = await combineNotes({ userId: user.id, noteIds: selected, level, quizCount });
+      const result = await combineNotes({ userId: user.id, noteIds: selected, level, quizCount, language });
       sessionStorage.setItem("notebuddy_last_result", JSON.stringify(result));
       toast.success("Combined study kit ready! +15 XP 🎉");
       navigate("/results", { state: { result } });
@@ -109,6 +111,9 @@ export default function Combine() {
 
               <p className="text-sm font-bold text-ink/70 mb-2 mt-5">How many quiz questions?</p>
               <QuizCountSlider value={quizCount} onChange={setQuizCount} />
+
+              <p className="text-sm font-bold text-ink/70 mb-2 mt-5">Language</p>
+              <LanguageSelector value={language} onChange={setLanguage} />
 
               <button
                 onClick={submit}

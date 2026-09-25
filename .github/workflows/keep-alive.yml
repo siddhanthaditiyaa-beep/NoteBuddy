@@ -1,0 +1,18 @@
+name: Keep Render backend awake
+
+on:
+  schedule:
+    # Every 10 minutes — Render's free tier sleeps after ~15 min idle, so
+    # this keeps it from ever going cold and hitting real users with a
+    # 30-60 second first-load delay.
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /health
+        run: |
+          curl -sf https://notebuddy-backend-92m7.onrender.com/health \
+            || echo "Ping failed — backend may currently be redeploying or waking up."

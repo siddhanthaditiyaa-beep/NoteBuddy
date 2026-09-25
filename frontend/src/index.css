@@ -2,14 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-ink: 21 20 41;       /* #151429 */
+  --color-cloud: 247 246 251;  /* #F7F6FB */
+}
+
+.dark {
+  --color-ink: 232 231 245;    /* light text on dark backgrounds */
+  --color-cloud: 15 15 23;     /* near-black page background */
+}
+
 html, body, #root {
   height: 100%;
 }
 
 body {
   font-family: "Nunito", system-ui, sans-serif;
-  background: #F7F6FB;
-  color: #151429;
+  background: rgb(var(--color-cloud));
+  color: rgb(var(--color-ink));
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Every page's cards/panels use plain "bg-white" — this is the one
+   deliberate broad-brush rule that makes dark mode work across the whole
+   app without a per-component dark: pass on every single card. */
+.dark .bg-white {
+  background-color: #1c1b2e;
+}
+.dark .shadow-card,
+.dark .shadow-soft,
+.dark .shadow-pop {
+  box-shadow: 0 8px 30px -8px rgba(0, 0, 0, 0.55);
+}
+.dark input,
+.dark textarea,
+.dark select {
+  color: rgb(var(--color-ink));
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #35334f;
+}
+
+/* Keeps page content from being hidden behind the fixed mobile bottom nav,
+   without needing to touch every page's own padding. */
+@media (max-width: 767px) {
+  body:has(nav.fixed.bottom-0) {
+    padding-bottom: 4.25rem;
+  }
 }
 
 h1, h2, h3, h4, .font-display {

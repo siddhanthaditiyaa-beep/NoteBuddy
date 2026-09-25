@@ -1,8 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, LogOut, ChevronDown, Menu, X, LayoutDashboard, Brain, Layers, Plus } from "lucide-react";
+import { Sparkles, LogOut, ChevronDown, Menu, X, LayoutDashboard, Brain, Layers, Plus, Sun, Moon, CalendarDays } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <button
+      onClick={toggleTheme}
+      title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      className="w-9 h-9 rounded-xl2 bg-white dark:bg-[#1c1b2e] shadow-card flex items-center justify-center text-ink/70 shrink-0 hover:text-primary-600 transition-colors"
+    >
+      {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+    </button>
+  );
+}
 
 function AccountMenu() {
   const { user, signOut } = useAuth();
@@ -115,6 +129,13 @@ function MobileMenu({ open, onClose }) {
             </Link>
             <Link
               onClick={onClose}
+              to="/planner"
+              className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-ink/70 hover:bg-primary-50 transition-colors"
+            >
+              <CalendarDays size={17} /> Study Planner
+            </Link>
+            <Link
+              onClick={onClose}
               to="/upload"
               className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-primary-600 hover:bg-primary-50 transition-colors"
             >
@@ -132,7 +153,7 @@ export default function NavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <nav className="sticky top-0 z-40 backdrop-blur-md bg-white/70 border-b border-primary-100 relative">
+    <nav className="sticky top-0 z-40 backdrop-blur-md bg-white/70 dark:bg-[#0f0f17]/80 border-b border-primary-100 dark:border-white/10 relative">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
         <Link
           to={user ? "/dashboard" : "/"}
@@ -169,12 +190,19 @@ export default function NavBar() {
                 Combine
               </Link>
               <Link
+                to="/planner"
+                className="hidden sm:inline text-sm font-bold text-ink/70 hover:text-primary-600 transition-colors"
+              >
+                Planner
+              </Link>
+              <Link
                 to="/upload"
                 data-tour="new-note-btn"
                 className="hidden sm:inline-flex text-sm font-bold px-4 py-2 rounded-xl2 bg-primary-500 text-white shadow-soft hover:bg-primary-600 transition-colors"
               >
                 + New Note
               </Link>
+              <ThemeToggle />
               <AccountMenu />
               <button
                 onClick={() => setMobileOpen((o) => !o)}
@@ -187,6 +215,7 @@ export default function NavBar() {
             </>
           ) : (
             <>
+              <ThemeToggle />
               <Link to="/login" className="text-sm font-bold text-ink/70 hover:text-primary-600">
                 Log in
               </Link>

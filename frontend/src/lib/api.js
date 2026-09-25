@@ -30,11 +30,13 @@ async function handle(res) {
   return res.json();
 }
 
-export async function processNote({ userId, level, text, file, quizCount = 5 }) {
+export async function processNote({ userId, level, text, file, quizCount = 5, language = "English", mode = "full" }) {
   const form = new FormData();
   form.append("user_id", userId);
   form.append("level", level);
   form.append("quiz_count", quizCount);
+  form.append("language", language);
+  form.append("mode", mode);
   if (file) form.append("file", file);
   else form.append("text", text);
 
@@ -46,11 +48,26 @@ export async function processNote({ userId, level, text, file, quizCount = 5 }) 
   return handle(res);
 }
 
-export async function regenerateNote({ noteId, userId, level, quizCount = 5 }) {
+// Extraction only (OCR/PDF text) — no Gemini call, completely free. Lets the
+// student review and fix bad OCR before spending a generation on it.
+export async function extractText({ files }) {
+  const form = new FormData();
+  files.forEach((f) => form.append("files", f));
+  const res = await fetch(`${API_BASE}/api/notes/extract`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: form,
+  });
+  return handle(res);
+}
+
+export async function regenerateNote({ noteId, userId, level, quizCount = 5, language = "English", useWeakTopics = false }) {
   const form = new FormData();
   form.append("user_id", userId);
   form.append("level", level);
   form.append("quiz_count", quizCount);
+  form.append("language", language);
+  form.append("use_weak_topics", useWeakTopics);
   const res = await fetch(`${API_BASE}/api/notes/${noteId}/regenerate`, {
     method: "POST",
     headers: await authHeaders(),
@@ -73,6 +90,21 @@ export async function getNote(noteId, userId) {
   return handle(res);
 }
 
+export async function shareNote(noteId, isPublic = true) {
+  const res = await fetch(`${API_BASE}/api/notes/${noteId}/share`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ is_public: isPublic }),
+  });
+  return handle(res);
+}
+
+// No auth header — this is the whole point of a public shared link.
+export async function getSharedNote(noteId) {
+  const res = await fetch(`${API_BASE}/api/notes/public/${noteId}`);
+  return handle(res);
+}
+
 export async function chatAboutNotes({ rawText, question, history }) {
   const res = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
@@ -89,11 +121,18 @@ export async function getProgress(userId) {
   return handle(res);
 }
 
-export async function combineNotes({ userId, noteIds, level, quizCount = 5 }) {
+export async function getWeakTopics(userId) {
+  const res = await fetch(`${API_BASE}/api/user/weak-topics?user_id=${userId}`, {
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
+export async function combineNotes({ userId, noteIds, level, quizCount = 5, language = "English" }) {
   const res = await fetch(`${API_BASE}/api/notes/combine`, {
     method: "POST",
     headers: await authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ user_id: userId, note_ids: noteIds, level, quiz_count: quizCount }),
+    body: JSON.stringify({ user_id: userId, note_ids: noteIds, level, quiz_count: quizCount, language }),
   });
   return handle(res);
 }
@@ -117,6 +156,24 @@ export async function gradeCard({ userId, noteId, cardIndex, quality }) {
       card_index: cardIndex,
       quality,
     }),
+  });
+  return handle(res);
+}
+
+export async function recordQuizAnswer({ topic, correct }) {
+  const res = await fetch(`${API_BASE}/api/review/quiz-answer`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ topic, correct }),
+  });
+  return handle(res);
+}
+
+export async function createStudyPlan({ goal, noteIds }) {
+  const res = await fetch(`${API_BASE}/api/planner/plan`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ goal, note_ids: noteIds }),
   });
   return handle(res);
 }

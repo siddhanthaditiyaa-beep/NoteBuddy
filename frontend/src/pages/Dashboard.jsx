@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { FileText, Plus, Flame, Trophy, BookOpen, Search, Layers, Brain } from "lucide-react";
+import { FileText, Plus, Flame, Trophy, BookOpen, Search, Layers, Brain, Target, CalendarDays } from "lucide-react";
 import NavBar from "../components/NavBar";
 import XPBar from "../components/XPBar";
+import Skeleton from "../components/Skeleton";
 import { useAuth } from "../context/AuthContext";
 import { useTour } from "../context/TourContext";
 import { isDemoUser } from "../lib/constants";
 import { getBadgeVisual } from "../lib/badges";
-import { listNotes, getProgress, getNote } from "../lib/api";
+import { listNotes, getProgress, getNote, getWeakTopics } from "../lib/api";
 
 function getGreeting(user, notesCount, demo) {
   if (demo) return "You're exploring the NoteBuddy demo 🎮";
@@ -32,6 +33,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeSubject, setActiveSubject] = useState(null);
+  const [weakTopics, setWeakTopics] = useState([]);
 
   useEffect(() => {
     if (!user) return;
@@ -42,6 +44,9 @@ export default function Dashboard() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    getWeakTopics(user.id)
+      .then((res) => setWeakTopics(res.topics || []))
+      .catch(() => {});
   }, [user]);
 
   // Kick off the interactive spotlight tour once per login, not on every
@@ -116,6 +121,28 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {weakTopics.length > 0 && (
+            <div className="mb-8 bg-white rounded-xl2 shadow-card p-5">
+              <h2 className="font-display text-sm font-bold text-ink/50 mb-3 flex items-center gap-2">
+                <Target size={16} className="text-coral-500" /> Topics to review
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {weakTopics.map((t) => (
+                  <span
+                    key={t.term}
+                    title={`${t.wrong_count} missed vs ${t.correct_count} correct`}
+                    className="px-3 py-1.5 rounded-full bg-coral-50 text-coral-600 text-xs font-bold"
+                  >
+                    {t.term}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs font-semibold text-ink/40 mt-3">
+                Open a note on this subject and hit "Focus on my weak topics" to get flashcards and quiz questions targeting these.
+              </p>
+            </div>
+          )}
+
           {progress.badges && progress.badges.length > 0 && (
             <div className="mb-8">
               <h2 className="font-display text-sm font-bold text-ink/50 mb-3">Your badges</h2>
@@ -142,6 +169,14 @@ export default function Dashboard() {
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="font-display text-xl font-bold">Your notes</h2>
             <div className="flex items-center gap-2">
+              {notes.length > 0 && (
+                <Link
+                  to="/planner"
+                  className="px-3 py-2 rounded-xl2 bg-white shadow-card text-ink/70 font-bold text-sm flex items-center gap-1 hover:text-primary-600 transition-colors"
+                >
+                  <CalendarDays size={16} /> Plan
+                </Link>
+              )}
               {notes.length >= 2 && (
                 <>
                   <Link
@@ -205,7 +240,11 @@ export default function Dashboard() {
           )}
 
           {loading ? (
-            <p className="text-ink/50 font-semibold">Loading...</p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-24" />
+              ))}
+            </div>
           ) : notes.length === 0 ? (
             <div className="bg-white rounded-xl2 shadow-card p-10 text-center relative overflow-hidden">
               <div className="w-16 h-16 rounded-xl3 bg-primary-50 flex items-center justify-center mx-auto mb-4">

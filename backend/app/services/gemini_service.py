@@ -71,16 +71,79 @@ LEVEL_INSTRUCTIONS = {
     "student": "Explain it at a standard high-school/early-college level. You can use normal academic vocabulary.",
 }
 
+# A student can type any language name into the selector, so this is a
+# starter list for the UI dropdown, not a hard allowlist — Gemini already
+# understands far more than these.
+SUPPORTED_LANGUAGES = [
+    "English", "Hindi", "Marathi", "Tamil", "Telugu", "Kannada",
+    "Gujarati", "Bengali", "Malayalam", "Punjabi", "Urdu",
+]
 
-def generate_study_kit(text: str, level: str = "beginner", quiz_count: int = 5) -> dict:
+
+def _language_instruction(language: str) -> str:
+    if not language or language.strip().lower() in ("english", "en"):
+        return ""
+    return (
+        f"\nRespond ENTIRELY in {language} — the summary, key terms, flashcards, "
+        f"quiz questions/options/explanations, and mind map labels should all be "
+        f"in {language}. Keep proper nouns and terms with no natural translation "
+        f"in their standard form."
+    )
+
+
+def _weak_topics_instruction(weak_topics: list[str] | None) -> str:
+    if not weak_topics:
+        return ""
+    joined = ", ".join(weak_topics[:5])
+    return (
+        f"\nThis student has struggled with these topics before: {joined}. "
+        f"Where relevant to the material below, prioritize covering and "
+        f"testing these in the flashcards and quiz — don't force them in if "
+        f"they genuinely don't apply to this material."
+    )
+
+
+def generate_study_kit(
+    text: str,
+    level: str = "beginner",
+    quiz_count: int = 5,
+    language: str = "English",
+    mode: str = "full",
+    weak_topics: list[str] | None = None,
+) -> dict:
     """One call that produces the full study kit: summary, key terms,
-    flashcards, and a quiz — all tailored to the requested reading level."""
+    flashcards, and a quiz — all tailored to the requested reading level.
+
+    mode="cram" produces a dense, exam-eve cheat-sheet variant instead of
+    the normal study kit — same JSON shape (so the frontend needs no special
+    rendering path), but the summary becomes a condensed cheat sheet and the
+    flashcards are capped at the 10 highest-yield ones."""
     level_instruction = LEVEL_INSTRUCTIONS.get(level, LEVEL_INSTRUCTIONS["beginner"])
     quiz_count = quiz_count if quiz_count in (5, 10, 15, 20) else 5
+    language_instruction = _language_instruction(language)
+    weak_instruction = _weak_topics_instruction(weak_topics)
+
+    if mode == "cram":
+        quiz_count = 5
+        mode_instruction = (
+            "This is EXAM CRAM MODE — the student has an exam very soon and needs "
+            "the highest-yield material only, fast. Make 'summary' a dense, "
+            "scannable 1-page cheat sheet: short bullet-style lines (use \\n between "
+            "them), only the facts most likely to be tested, no fluff or long "
+            "sentences. Pick exactly 10 flashcards: the single highest-yield "
+            "facts/definitions/relationships, not a broad survey of the material."
+        )
+        flashcard_count_rule = "flashcards: exactly 10 items — the highest-yield ones only."
+    else:
+        mode_instruction = ""
+        flashcard_count_rule = "flashcards: 6-10 items, good for active recall."
 
     prompt = f"""You are NoteBuddy, an AI study assistant that helps students (including young or beginner learners) understand their study material.
 
 {level_instruction}
+{mode_instruction}
+{language_instruction}
+{weak_instruction}
 
 Given the study material below, produce a JSON object with EXACTLY this shape and nothing else (no markdown fences, no commentary):
 
@@ -99,7 +162,8 @@ Given the study material below, produce a JSON object with EXACTLY this shape an
       "question": "...",
       "options": ["A", "B", "C", "D"],
       "correct_index": 0,
-      "explanation": "why this is correct, one sentence"
+      "explanation": "why this is correct, one sentence",
+      "topic": "the single key term/concept this question tests — reuse one of the key_terms exactly when it applies"
     }}
   ],
   "mind_map": {{
@@ -112,7 +176,7 @@ Given the study material below, produce a JSON object with EXACTLY this shape an
 
 Rules:
 - key_terms: 4-8 items, most important terms only.
-- flashcards: 6-10 items, good for active recall.
+- {flashcard_count_rule}
 - quiz: exactly {quiz_count} multiple-choice questions, exactly 4 options each, mix of difficulty.
 - mind_map: 3-6 branches, each with 2-4 short children. Keep every label short enough to fit in a small box (a few words max).
 - Keep everything grounded in the material below. Do not invent facts not implied by it.

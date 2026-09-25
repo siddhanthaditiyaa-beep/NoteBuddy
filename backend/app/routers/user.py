@@ -23,3 +23,12 @@ async def progress(current_user: CurrentUser = Depends(get_current_user)):
         "notes_count": notes_count,
         "badges": supabase_client.get_badges(notes_count, streak),
     }
+
+
+@router.get("/weak-topics")
+async def weak_topics(current_user: CurrentUser = Depends(get_current_user)):
+    try:
+        topics = supabase_client.get_weak_topics(current_user.id)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    return {"topics": topics}

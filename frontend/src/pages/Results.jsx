@@ -13,6 +13,10 @@ import {
   Download,
   Volume2,
   VolumeX,
+  Share2,
+  Target,
+  Copy,
+  Check,
 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import FlashcardDeck from "../components/FlashcardDeck";
@@ -20,7 +24,7 @@ import Quiz from "../components/Quiz";
 import ChatPanel from "../components/ChatPanel";
 import LevelSlider from "../components/LevelSlider";
 import { useAuth } from "../context/AuthContext";
-import { regenerateNote } from "../lib/api";
+import { regenerateNote, shareNote, recordQuizAnswer } from "../lib/api";
 
 const TABS = [
   { id: "summary", label: "Summary", icon: BookOpen },
@@ -40,10 +44,14 @@ export default function Results() {
   const [studyKit, setStudyKit] = useState(stored?.study_kit);
   const [rawText] = useState(stored?.raw_text || stored?.note?.raw_text || "");
   const [noteId] = useState(stored?.note?.id);
+  const [language] = useState(stored?.language || "English");
   const [tab, setTab] = useState("summary");
   const [level, setLevel] = useState("beginner");
   const [regenLoading, setRegenLoading] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [shareUrl, setShareUrl] = useState(null);
+  const [sharing, setSharing] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Stop any in-progress read-aloud if the user navigates away mid-speech.
   useEffect(() => {
@@ -161,11 +169,80 @@ export default function Results() {
       // Keep the same number of quiz questions the learner originally chose,
       // rather than silently resetting it back to the default of 5.
       const quizCount = studyKit.quiz?.length || 5;
-      const { study_kit } = await regenerateNote({ noteId, userId: user.id, level: newLevel, quizCount });
+      const { study_kit } = await regenerateNote({ noteId, userId: user.id, level: newLevel, quizCount, language });
       setStudyKit(study_kit);
     } finally {
       setRegenLoading(false);
     }
+  };
+
+  const handleFocusWeakTopics = async () => {
+    if (!noteId) {
+      toast.error("Save this note first — weak-topic focus needs a saved study kit.");
+      return;
+    }
+    setRegenLoading(true);
+    try {
+      const quizCount = studyKit.quiz?.length || 5;
+      const { study_kit } = await regenerateNote({
+        noteId, userId: user.id, level, quizCount, language, useWeakTopics: true,
+      });
+      setStudyKit(study_kit);
+      toast.success("Regenerated with extra focus on your weak topics!");
+    } catch (e) {
+      toast.error(e.message || "Couldn't regenerate right now.");
+    } finally {
+      setRegenLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!noteId) {
+      toast.error("Save this note first — sharing needs a saved study kit.");
+      return;
+    }
+    if (shareUrl) {
+      navigator.clipboard?.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      return;
+    }
+    setSharing(true);
+    try {
+      await shareNote(noteId, true);
+      const url = `${window.location.origin}/shared/${noteId}`;
+      setShareUrl(url);
+      navigator.clipboard?.writeText(url);
+      toast.success("Share link copied to clipboard!");
+    } catch (e) {
+      toast.error(e.message || "Couldn't create a share link right now.");
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const downloadAnkiCsv = () => {
+    const cards = studyKit.flashcards || [];
+    if (!cards.length) {
+      toast.error("No flashcards to export yet.");
+      return;
+    }
+    const escapeCsv = (val) => `"${String(val).replace(/"/g, '""')}"`;
+    const rows = cards.map((c) => `${escapeCsv(c.front)},${escapeCsv(c.back)}`);
+    const csv = rows.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const safeName = (studyKit.title || "study-kit").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 50);
+    a.href = url;
+    a.download = `${safeName}-anki.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("In Anki: Import File → pick this CSV → set fields as Front, Back.");
+  };
+
+  const handleQuizAnswer = ({ topic, correct }) => {
+    recordQuizAnswer({ topic, correct }).catch(() => {});
   };
 
   return (
@@ -197,13 +274,45 @@ export default function Results() {
               >
                 <Download size={16} />
               </button>
+              <button
+                onClick={downloadAnkiCsv}
+                title="Export flashcards for Anki (CSV)"
+                className="w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors text-xs font-black"
+              >
+                CSV
+              </button>
+              <button
+                onClick={handleShare}
+                disabled={sharing}
+                title={shareUrl ? "Copy share link" : "Create a shareable link"}
+                className="w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors disabled:opacity-60"
+              >
+                {copied ? <Check size={16} className="text-mint-500" /> : shareUrl ? <Copy size={16} /> : <Share2 size={16} />}
+              </button>
             </div>
           </div>
-          <h1 className="font-display text-3xl font-extrabold mb-6">{studyKit.title}</h1>
+          <h1 className="font-display text-3xl font-extrabold mb-1">{studyKit.title}</h1>
+          {shareUrl && (
+            <p className="text-xs font-semibold text-primary-600 mb-4 break-all">
+              Public link: {shareUrl}
+            </p>
+          )}
 
-          <div className="mb-6">
-            <p className="text-sm font-bold text-ink/70 mb-2">Explanation level</p>
-            <LevelSlider value={level} onChange={handleLevelChange} />
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-ink/70 mb-2">Explanation level</p>
+              <LevelSlider value={level} onChange={handleLevelChange} />
+            </div>
+            {noteId && (
+              <button
+                onClick={handleFocusWeakTopics}
+                disabled={regenLoading}
+                title="Regenerate this study kit with extra focus on topics you've missed in quizzes"
+                className="px-4 py-2.5 rounded-xl2 bg-white shadow-card text-sm font-bold text-ink/70 flex items-center gap-2 hover:text-primary-600 transition-colors disabled:opacity-60"
+              >
+                <Target size={16} /> Focus on my weak topics
+              </button>
+            )}
           </div>
 
           <div className="flex gap-2 mb-6 overflow-x-auto">
@@ -254,7 +363,7 @@ export default function Results() {
                 )}
                 {tab === "quiz" && (
                   <div className="bg-white rounded-xl2 shadow-card p-8">
-                    <Quiz questions={studyKit.quiz} />
+                    <Quiz questions={studyKit.quiz} onAnswer={handleQuizAnswer} />
                   </div>
                 )}
                 {tab === "mindmap" && (
