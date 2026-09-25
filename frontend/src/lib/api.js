@@ -274,6 +274,30 @@ export async function gradeShortAnswer({ contextText, question, studentAnswer })
   return handle(res);
 }
 
+// Async group-quiz leaderboard — anyone with a shared note's link can log
+// their score under a nickname, no login required (mirrors getSharedNote).
+export async function submitLeaderboardScore({ noteId, displayName, score, total }) {
+  const res = await fetch(`${API_BASE}/api/notes/${noteId}/leaderboard`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ display_name: displayName, score, total }),
+  });
+  return handle(res);
+}
+
+export async function getLeaderboard(noteId) {
+  const res = await fetch(`${API_BASE}/api/notes/${noteId}/leaderboard`);
+  return handle(res);
+}
+
+export async function deleteAccount() {
+  const res = await fetch(`${API_BASE}/api/user/account`, {
+    method: "DELETE",
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
 export async function searchNotes(query) {
   const res = await fetch(`${API_BASE}/api/notes/search`, {
     method: "POST",

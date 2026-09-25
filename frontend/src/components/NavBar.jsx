@@ -2,11 +2,127 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
-import { Sparkles, LogOut, ChevronDown, Menu, X, LayoutDashboard, Brain, Layers, Plus, Sun, Moon, CalendarDays, Bell, BellOff } from "lucide-react";
+import { Sparkles, LogOut, ChevronDown, Menu, X, LayoutDashboard, Brain, Layers, Plus, Sun, Moon, CalendarDays, Bell, BellOff, Gift, ShieldAlert } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useFontSize } from "../context/FontSizeContext";
 import { isPushSupported, getPushSubscriptionStatus, enablePushReminders, disablePushReminders } from "../lib/push";
+import { deleteAccount } from "../lib/api";
+import { LATEST_VERSION } from "../lib/changelog";
+import ChangelogPanel from "./ChangelogPanel";
+
+const CHANGELOG_SEEN_KEY = "notebuddy_changelog_seen";
+
+function WhatsNewButton() {
+  const [open, setOpen] = useState(false);
+  const [hasUnseen, setHasUnseen] = useState(false);
+
+  useEffect(() => {
+    setHasUnseen(localStorage.getItem(CHANGELOG_SEEN_KEY) !== LATEST_VERSION);
+  }, []);
+
+  const openPanel = () => {
+    setOpen(true);
+    setHasUnseen(false);
+    localStorage.setItem(CHANGELOG_SEEN_KEY, LATEST_VERSION);
+  };
+
+  return (
+    <>
+      <button
+        onClick={openPanel}
+        title="What's new"
+        aria-label="What's new in NoteBuddy"
+        className="relative w-9 h-9 rounded-xl2 bg-white dark:bg-[#1c1b2e] shadow-card flex items-center justify-center text-ink/70 shrink-0 hover:text-primary-600 transition-colors"
+      >
+        <Gift size={16} />
+        {hasUnseen && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-coral-500" />}
+      </button>
+      <ChangelogPanel open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+// Requires typing DELETE to confirm — this is irreversible (wipes every
+// note and the auth account itself), so a single click isn't enough.
+function DeleteAccountModal({ open, onClose }) {
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
+  const [confirmText, setConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const confirmDisabled = confirmText.trim().toUpperCase() !== "DELETE" || deleting;
+
+  const handleDelete = async () => {
+    if (confirmDisabled) return;
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      toast.success("Your account and all its data have been deleted.");
+      await signOut();
+      navigate("/");
+    } catch (e) {
+      toast.error(e.message || "Couldn't delete your account right now — please try again.");
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-ink/30 z-[60]"
+          />
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.97 }}
+            transition={{ duration: 0.18 }}
+            role="dialog"
+            aria-label="Delete your account"
+            className="fixed z-[61] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-sm bg-white rounded-xl2 shadow-pop p-6"
+          >
+            <div className="w-11 h-11 rounded-xl2 bg-coral-50 flex items-center justify-center text-coral-500 mb-4">
+              <ShieldAlert size={22} />
+            </div>
+            <h2 className="font-display text-lg font-bold mb-2">Delete your account?</h2>
+            <p className="text-sm font-semibold text-ink/60 mb-4">
+              This permanently deletes every note, flashcard, and badge you've made, and can't be undone.
+              Type <span className="font-black text-coral-600">DELETE</span> to confirm.
+            </p>
+            <input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="Type DELETE"
+              autoFocus
+              className="w-full px-4 py-2.5 rounded-xl2 bg-coral-50/50 shadow-card outline-none font-bold text-sm mb-4 focus:ring-2 focus:ring-coral-300"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={onClose}
+                className="flex-1 py-2.5 rounded-xl2 bg-primary-50 text-ink/60 font-bold text-sm hover:bg-primary-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={confirmDisabled}
+                className="flex-1 py-2.5 rounded-xl2 bg-coral-500 text-white font-bold text-sm hover:bg-coral-600 disabled:opacity-50 transition-colors"
+              >
+                {deleting ? "Deleting..." : "Delete forever"}
+              </button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -61,6 +177,7 @@ function AccountMenu() {
   const menuRef = useRef(null);
   const [pushStatus, setPushStatus] = useState("checking"); // checking | unsupported | enabled | disabled
   const [pushBusy, setPushBusy] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   useEffect(() => {
     const onClickOutside = (e) => {
@@ -151,9 +268,21 @@ function AccountMenu() {
             >
               <LogOut size={16} /> Log out
             </button>
+            <div className="border-t border-primary-50 mt-1 pt-1">
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  setDeleteOpen(true);
+                }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-ink/30 hover:text-coral-500 hover:bg-coral-50 transition-colors"
+              >
+                <ShieldAlert size={14} /> Delete my account
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
+      <DeleteAccountModal open={deleteOpen} onClose={() => setDeleteOpen(false)} />
     </div>
   );
 }
@@ -275,6 +404,7 @@ export default function NavBar() {
               </Link>
               <FontSizeToggle />
               <ThemeToggle />
+              <WhatsNewButton />
               <AccountMenu />
               <button
                 onClick={() => setMobileOpen((o) => !o)}

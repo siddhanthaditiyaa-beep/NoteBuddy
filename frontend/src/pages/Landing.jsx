@@ -140,6 +140,16 @@ export default function Landing() {
           </Link>
         </div>
       </section>
+
+      <footer className="max-w-6xl mx-auto px-6 pb-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-bold text-ink/40">
+        <span>&copy; {new Date().getFullYear()} NoteBuddy</span>
+        <Link to="/privacy" className="hover:text-primary-600 hover:underline">
+          Privacy
+        </Link>
+        <Link to="/gallery" className="hover:text-primary-600 hover:underline">
+          Gallery
+        </Link>
+      </footer>
     </div>
   );
 }

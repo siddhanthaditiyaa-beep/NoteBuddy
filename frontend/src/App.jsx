@@ -18,6 +18,7 @@ import Combine from "./pages/Combine";
 import SharedNote from "./pages/SharedNote";
 import Planner from "./pages/Planner";
 import Gallery from "./pages/Gallery";
+import Privacy from "./pages/Privacy";
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/shared/:noteId" element={<SharedNote />} />
             <Route path="/gallery" element={<Gallery />} />
+            <Route path="/privacy" element={<Privacy />} />
             <Route path="/signup" element={<Signup />} />
             <Route
               path="/dashboard"

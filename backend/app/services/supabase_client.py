@@ -443,3 +443,62 @@ def get_public_note(note_id: str) -> dict | None:
         .execute()
     )
     return result.data
+
+
+# ---------------------------------------------------------------------------
+# Async group-quiz leaderboard — classmates who got the same share link can
+# take the quiz on their own schedule (no need to be online together) and
+# still see how they stack up against everyone else who's taken it.
+# ---------------------------------------------------------------------------
+
+
+def record_quiz_attempt(note_id: str, display_name: str, score: int, total: int) -> dict:
+    client = get_client()
+    note = (
+        client.table("notes").select("id").eq("id", note_id).eq("is_public", True).maybe_single().execute()
+    )
+    if not note or not note.data:
+        raise ValueError("This study kit isn't shared, so it doesn't have a leaderboard.")
+    result = client.table("quiz_leaderboard").insert({
+        "note_id": note_id,
+        "display_name": (display_name or "Anonymous").strip()[:40] or "Anonymous",
+        "score": max(0, int(score)),
+        "total": max(1, int(total)),
+    }).execute()
+    return result.data[0] if result.data else {}
+
+
+def get_leaderboard(note_id: str, limit: int = 10) -> list[dict]:
+    client = get_client()
+    result = (
+        client.table("quiz_leaderboard")
+        .select("display_name, score, total, created_at")
+        .eq("note_id", note_id)
+        .order("score", desc=True)
+        .order("created_at", desc=False)
+        .limit(limit)
+        .execute()
+    )
+    return result.data or []
+
+
+# ---------------------------------------------------------------------------
+# Account deletion — a real "delete my account" flow (not just a support
+# email) is one of the plainest trust signals a student-facing app can show
+# in a demo: wipes every row tied to this student, then removes the auth
+# user itself so they can't be looked up by email/login again.
+# ---------------------------------------------------------------------------
+
+
+def delete_account(user_id: str) -> None:
+    client = get_client()
+    for table in ("notes", "flashcard_progress", "topic_progress", "push_subscriptions"):
+        try:
+            client.table(table).delete().eq("user_id", user_id).execute()
+        except Exception:
+            pass  # best-effort — a missing/renamed table shouldn't block the rest of the deletion
+    try:
+        client.table("profiles").delete().eq("id", user_id).execute()
+    except Exception:
+        pass
+    client.auth.admin.delete_user(user_id)

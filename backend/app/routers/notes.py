@@ -375,6 +375,36 @@ async def get_public_note(note_id: str):
     return note
 
 
+class LeaderboardSubmission(BaseModel):
+    display_name: str
+    score: int
+    total: int
+
+
+@router.post("/{note_id}/leaderboard")
+@limiter.limit("10/minute")
+async def submit_leaderboard_score(request: Request, note_id: str, req: LeaderboardSubmission):
+    """No auth required, same as the shared-note read itself — anyone with
+    the link can log a quiz attempt under a nickname. Only works for notes
+    the owner has actually made public, same gate as the shared page."""
+    try:
+        supabase_client.record_quiz_attempt(note_id, req.display_name, req.score, req.total)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    return {"status": "recorded"}
+
+
+@router.get("/{note_id}/leaderboard")
+async def leaderboard(note_id: str):
+    try:
+        rows = supabase_client.get_leaderboard(note_id)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    return {"leaderboard": rows}
+
+
 class SearchRequest(BaseModel):
     query: str
 

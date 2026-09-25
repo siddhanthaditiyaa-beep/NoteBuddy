@@ -129,7 +129,7 @@ export default function SharedNote() {
           )}
           {tab === "quiz" && (
             <div className="bg-white rounded-xl2 shadow-card p-8">
-              <Quiz questions={studyKit.quiz} />
+              <Quiz questions={studyKit.quiz} noteId={noteId} showLeaderboard />
             </div>
           )}
         </motion.div>

@@ -1,8 +1,79 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, XCircle, Trophy } from "lucide-react";
+import toast from "react-hot-toast";
+import { CheckCircle2, XCircle, Trophy, Users, Loader2 } from "lucide-react";
+import { submitLeaderboardScore, getLeaderboard } from "../lib/api";
 
-export default function Quiz({ questions = [], onAnswer }) {
+// Shown after a quiz on a shared note — lets whoever's taking it log their
+// score under a nickname and see how they stack up against everyone else
+// who's taken this same quiz, all asynchronously (no need to be online at
+// the same time as classmates).
+function LeaderboardSection({ noteId, score, total }) {
+  const [name, setName] = useState(() => localStorage.getItem("notebuddy_leaderboard_name") || "");
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [rows, setRows] = useState(null);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    try {
+      localStorage.setItem("notebuddy_leaderboard_name", trimmed);
+      await submitLeaderboardScore({ noteId, displayName: trimmed, score, total });
+      const { leaderboard } = await getLeaderboard(noteId);
+      setRows(leaderboard || []);
+      setSubmitted(true);
+    } catch (err) {
+      toast.error(err.message || "Couldn't save your score right now.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="mt-6 pt-6 border-t border-primary-50 w-full max-w-sm mx-auto text-left">
+      <h4 className="font-display text-sm font-bold text-ink/60 mb-3 flex items-center gap-2">
+        <Users size={16} className="text-primary-500" /> Group leaderboard
+      </h4>
+      {!submitted ? (
+        <form onSubmit={submit} className="flex gap-2">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your name or nickname"
+            maxLength={40}
+            className="flex-1 px-3 py-2 rounded-xl2 bg-white shadow-card outline-none font-semibold text-sm focus:ring-2 focus:ring-primary-300"
+          />
+          <button
+            type="submit"
+            disabled={submitting || !name.trim()}
+            className="px-4 py-2 rounded-xl2 bg-primary-500 text-white font-bold text-sm shadow-soft hover:bg-primary-600 disabled:opacity-60 transition-colors flex items-center gap-1.5 shrink-0"
+          >
+            {submitting ? <Loader2 size={14} className="animate-spin" /> : "Post score"}
+          </button>
+        </form>
+      ) : (
+        <div className="space-y-1.5">
+          {(rows || []).map((r, i) => (
+            <div
+              key={i}
+              className={`flex items-center justify-between px-3 py-2 rounded-xl2 text-sm font-bold ${
+                r.display_name === name.trim() && r.score === score ? "bg-primary-50 text-primary-700" : "bg-white shadow-card text-ink/70"
+              }`}
+            >
+              <span className="truncate">{i + 1}. {r.display_name}</span>
+              <span>{r.score}/{r.total}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function Quiz({ questions = [], onAnswer, noteId, showLeaderboard = false }) {
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState(null);
   const [score, setScore] = useState(0);
@@ -38,6 +109,7 @@ export default function Quiz({ questions = [], onAnswer }) {
         >
           Try again
         </button>
+        {showLeaderboard && noteId && <LeaderboardSection noteId={noteId} score={score} total={questions.length} />}
       </motion.div>
     );
   }

@@ -450,7 +450,12 @@ export default function Results() {
                 )}
                 {tab === "quiz" && (
                   <div className="bg-white rounded-xl2 shadow-card p-8">
-                    <Quiz questions={studyKit.quiz} onAnswer={handleQuizAnswer} />
+                    <Quiz
+                      questions={studyKit.quiz}
+                      onAnswer={handleQuizAnswer}
+                      noteId={noteId}
+                      showLeaderboard={!!shareUrl}
+                    />
                   </div>
                 )}
                 {tab === "mindmap" && (
