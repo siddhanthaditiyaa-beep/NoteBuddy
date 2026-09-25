@@ -17,6 +17,16 @@ export default defineConfig({
       injectRegister: 'auto',
       registerType: 'autoUpdate',
       devOptions: { enabled: false },
+      injectManifest: {
+        // The offline-AI model runtime (@mlc-ai/web-llm) is a large,
+        // lazily-imported chunk only ever loaded if a student explicitly
+        // opts into Offline AI from the account menu — it must NOT be part
+        // of the app-shell precache every visitor downloads just to open
+        // the site. The model weights it fetches afterward are cached by
+        // web-llm itself (via the Cache API), completely separately from
+        // this service worker's precache list.
+        globIgnores: ['**/lib-*.js'],
+      },
       manifest: {
         name: 'NoteBuddy — AI Study Companion',
         short_name: 'NoteBuddy',

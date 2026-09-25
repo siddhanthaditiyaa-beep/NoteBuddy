@@ -367,6 +367,36 @@ export async function searchNotes(query) {
   return handle(res);
 }
 
+export async function getClassHeatmap() {
+  const res = await fetch(`${API_BASE}/api/user/class-heatmap`, {
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
+export async function getStudyBuddyStatus() {
+  const res = await fetch(`${API_BASE}/api/user/study-buddy/status`, {
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
+export async function setStudyBuddyOptIn({ optIn, displayName, note }) {
+  const res = await fetch(`${API_BASE}/api/user/study-buddy/opt-in`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ opt_in: optIn, display_name: displayName, note }),
+  });
+  return handle(res);
+}
+
+export async function getStudyBuddyMatches() {
+  const res = await fetch(`${API_BASE}/api/user/study-buddy/matches`, {
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
 export async function resetDemoAccount(userId) {
   const res = await fetch(`${API_BASE}/api/demo/reset`, {
     method: "POST",

@@ -467,6 +467,121 @@ def get_recent_wrong_answers(user_id: str, limit: int = 25) -> list[dict]:
     return result.data or []
 
 
+# ---------------------------------------------------------------------------
+# Anonymized class-wide weak-spot heatmap — Part 5's social feature. Never
+# exposes anything about an individual student: only aggregate miss rates
+# per topic, and only once at least a handful of distinct students have
+# actually answered a question on that topic, so no single student's
+# performance is ever identifiable from it.
+# ---------------------------------------------------------------------------
+
+MIN_STUDENTS_FOR_HEATMAP = 3
+
+
+def get_class_heatmap(limit: int = 12) -> list[dict]:
+    client = get_client()
+    result = client.table("topic_progress").select("term, correct_count, wrong_count, user_id").execute()
+    rows = result.data or []
+    agg: dict[str, dict] = {}
+    for r in rows:
+        term = r.get("term")
+        if not term:
+            continue
+        a = agg.setdefault(term, {"correct": 0, "wrong": 0, "students": set()})
+        a["correct"] += r.get("correct_count") or 0
+        a["wrong"] += r.get("wrong_count") or 0
+        a["students"].add(r.get("user_id"))
+
+    out = []
+    for term, a in agg.items():
+        total = a["correct"] + a["wrong"]
+        student_count = len(a["students"])
+        if total == 0 or student_count < MIN_STUDENTS_FOR_HEATMAP:
+            continue  # anonymity floor — never surface a topic only a couple of students touched
+        out.append({
+            "term": term,
+            "miss_rate": round(a["wrong"] / total * 100),
+            "student_count": student_count,
+        })
+    out.sort(key=lambda x: x["miss_rate"], reverse=True)
+    return out[:limit]
+
+
+# ---------------------------------------------------------------------------
+# Study-buddy matching — opt-in only, and a student picks their own display
+# name rather than their real email ever being shown to anyone else.
+# Matches by shared note subjects, since that's the clearest signal of
+# "we're studying similar material" the app already has.
+# ---------------------------------------------------------------------------
+
+
+def set_study_buddy_opt_in(user_id: str, opt_in: bool, display_name: str | None, note: str | None) -> None:
+    client = get_client()
+    payload = {
+        "study_buddy_opt_in": opt_in,
+        "study_buddy_display_name": (display_name or "").strip()[:40] or None,
+        "study_buddy_note": (note or "").strip()[:200] or None,
+    }
+    existing = client.table("profiles").select("id").eq("id", user_id).maybe_single().execute()
+    if existing and existing.data:
+        client.table("profiles").update(payload).eq("id", user_id).execute()
+    else:
+        client.table("profiles").insert({"id": user_id, "xp": 0, "streak": 0, **payload}).execute()
+
+
+def get_study_buddy_status(user_id: str) -> dict:
+    client = get_client()
+    result = (
+        client.table("profiles")
+        .select("study_buddy_opt_in, study_buddy_display_name, study_buddy_note")
+        .eq("id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    data = result.data if result and result.data else {}
+    return {
+        "opt_in": bool(data.get("study_buddy_opt_in")),
+        "display_name": data.get("study_buddy_display_name") or "",
+        "note": data.get("study_buddy_note") or "",
+    }
+
+
+def find_study_buddies(user_id: str, limit: int = 10) -> list[dict]:
+    client = get_client()
+    my_notes = client.table("notes").select("subject").eq("user_id", user_id).execute().data or []
+    my_subjects = {(n.get("subject") or "General").strip().lower() for n in my_notes}
+    if not my_subjects:
+        return []
+
+    opted = (
+        client.table("profiles")
+        .select("id, study_buddy_display_name, study_buddy_note")
+        .eq("study_buddy_opt_in", True)
+        .neq("id", user_id)
+        .execute()
+    ).data or []
+    if not opted:
+        return []
+
+    candidate_ids = [o["id"] for o in opted]
+    their_notes = client.table("notes").select("user_id, subject").in_("user_id", candidate_ids).execute().data or []
+    subjects_by_user: dict[str, set] = {}
+    for n in their_notes:
+        subjects_by_user.setdefault(n["user_id"], set()).add((n.get("subject") or "General").strip().lower())
+
+    matches = []
+    for o in opted:
+        shared = my_subjects & subjects_by_user.get(o["id"], set())
+        if shared:
+            matches.append({
+                "display_name": o.get("study_buddy_display_name") or "A student",
+                "shared_subjects": sorted(shared),
+                "note": o.get("study_buddy_note") or "",
+            })
+    matches.sort(key=lambda m: len(m["shared_subjects"]), reverse=True)
+    return matches[:limit]
+
+
 def get_weak_topics(user_id: str, limit: int = 5) -> list[dict]:
     """Topics with at least one wrong answer and more misses than hits,
     worst-first — these are what Exam Cram Mode / regeneration lean on."""

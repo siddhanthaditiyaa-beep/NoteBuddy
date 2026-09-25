@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
 from app.auth import get_current_user, CurrentUser
 from app.services import supabase_client
 
@@ -46,3 +47,52 @@ async def delete_account(current_user: CurrentUser = Depends(get_current_user)):
     except Exception:
         raise HTTPException(502, "Couldn't fully delete your account right now — please try again in a moment.")
     return {"status": "deleted"}
+
+
+@router.get("/class-heatmap")
+async def class_heatmap(current_user: CurrentUser = Depends(get_current_user)):
+    """Anonymized class-wide weak-spot heatmap — aggregate miss rates per
+    topic across every student using the app, never anything about an
+    individual. Auth is only to gate this to logged-in students; the data
+    returned carries no identity at all."""
+    try:
+        return {"heatmap": supabase_client.get_class_heatmap()}
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+
+class StudyBuddyOptInRequest(BaseModel):
+    opt_in: bool
+    display_name: str | None = None
+    note: str | None = None
+
+
+@router.get("/study-buddy/status")
+async def study_buddy_status(current_user: CurrentUser = Depends(get_current_user)):
+    try:
+        return supabase_client.get_study_buddy_status(current_user.id)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+
+@router.post("/study-buddy/opt-in")
+async def study_buddy_opt_in(req: StudyBuddyOptInRequest, current_user: CurrentUser = Depends(get_current_user)):
+    if req.opt_in and not (req.display_name and req.display_name.strip()):
+        raise HTTPException(400, "Pick a display name first — this is what other students will see, never your email.")
+    try:
+        supabase_client.set_study_buddy_opt_in(current_user.id, req.opt_in, req.display_name, req.note)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    return {"status": "ok"}
+
+
+@router.get("/study-buddy/matches")
+async def study_buddy_matches(current_user: CurrentUser = Depends(get_current_user)):
+    """Matches by shared note subjects with everyone else who's opted in.
+    Only ever shows the display name and note THEY chose to share — never
+    their email or anything else tied to their account."""
+    try:
+        matches = supabase_client.find_study_buddies(current_user.id)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    return {"matches": matches}

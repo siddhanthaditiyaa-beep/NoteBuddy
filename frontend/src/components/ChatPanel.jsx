@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
-import { Send, Bot, User, Mic, Square } from "lucide-react";
+import { Send, Bot, User, Mic, Square, WifiOff } from "lucide-react";
 import { chatAboutNotes } from "../lib/api";
+import { isOfflineModelReady, askOfflineAI } from "../lib/offlineAI";
 
 const SpeechRecognitionAPI =
   typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
@@ -14,8 +15,24 @@ export default function ChatPanel({ rawText, language = "English" }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
+  const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" && !navigator.onLine);
   const bottomRef = useRef(null);
   const recognitionRef = useRef(null);
+
+  // On-Device Offline AI Fallback — when the network drops and a student
+  // already downloaded the offline model (Account menu -> Offline AI),
+  // chat keeps working with zero backend/Gemini calls, answered entirely
+  // on-device via WebGPU.
+  useEffect(() => {
+    const goOnline = () => setIsOffline(false);
+    const goOffline = () => setIsOffline(true);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -60,11 +77,28 @@ export default function ChatPanel({ rawText, language = "English" }) {
     setMessages(nextMessages);
     setInput("");
     setLoading(true);
+
+    if (isOffline && isOfflineModelReady()) {
+      try {
+        const systemPrompt = `You are NoteBuddy, a friendly study tutor. Answer the student's question using ONLY this material:\n\n${(rawText || "").slice(0, 3000)}\n\nKeep answers short (2-4 sentences) and clear.`;
+        const reply = await askOfflineAI(systemPrompt, question);
+        setMessages((m) => [...m, { role: "assistant", content: reply || "I couldn't come up with an answer to that." }]);
+      } catch (e) {
+        setMessages((m) => [...m, { role: "assistant", content: "The offline model hit a snag answering that — try rephrasing?" }]);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       const { reply } = await chatAboutNotes({ rawText, question, history: nextMessages, language });
       setMessages((m) => [...m, { role: "assistant", content: reply }]);
     } catch (e) {
-      setMessages((m) => [...m, { role: "assistant", content: "Hmm, I couldn't reach the AI just now. Try again?" }]);
+      const offlineHint = isOffline
+        ? " You're offline — download Offline AI from the account menu to keep chatting without a connection."
+        : "";
+      setMessages((m) => [...m, { role: "assistant", content: `Hmm, I couldn't reach the AI just now.${offlineHint} Try again?` }]);
     } finally {
       setLoading(false);
     }
@@ -72,6 +106,12 @@ export default function ChatPanel({ rawText, language = "English" }) {
 
   return (
     <div className="bg-white rounded-xl2 shadow-card flex flex-col h-[420px]">
+      {isOffline && (
+        <div className={`px-4 py-2 border-b border-primary-50 text-xs font-bold flex items-center gap-1.5 ${isOfflineModelReady() ? "text-mint-600" : "text-coral-600"}`}>
+          <WifiOff size={12} />
+          {isOfflineModelReady() ? "Offline — answering on-device" : "Offline — download Offline AI from the account menu to keep chatting"}
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.map((m, i) => (
           <motion.div

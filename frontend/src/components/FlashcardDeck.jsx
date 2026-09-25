@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { ChevronLeft, ChevronRight, RotateCw, Lightbulb, Loader2 } from "lucide-react";
 import { explainDifferently } from "../lib/api";
+import { isOfflineModelReady, askOfflineAI } from "../lib/offlineAI";
 
 export default function FlashcardDeck({ cards = [], rawText = "" }) {
   const [index, setIndex] = useState(0);
@@ -23,11 +24,26 @@ export default function FlashcardDeck({ cards = [], rawText = "" }) {
     e.stopPropagation(); // don't also flip the card back over
     if (explaining) return;
     setExplaining(true);
+    const concept = `${card.front}\n${card.back}`;
+
+    // On-Device Offline AI Fallback — if there's no network but the
+    // student already downloaded the offline model, this keeps working
+    // with zero backend calls.
+    if (typeof navigator !== "undefined" && !navigator.onLine && isOfflineModelReady()) {
+      try {
+        const systemPrompt = `You are NoteBuddy, a friendly tutor. Re-explain the given concept using a DIFFERENT analogy than a textbook definition — vivid, concrete, 2-4 sentences. Background material:\n\n${(rawText || "").slice(0, 2000)}`;
+        const text = await askOfflineAI(systemPrompt, concept);
+        setAltExplanation({ cardIndex: index, text: text || "Couldn't come up with another explanation for that one." });
+      } catch (err) {
+        toast.error(err.message || "The offline model hit a snag on that one.");
+      } finally {
+        setExplaining(false);
+      }
+      return;
+    }
+
     try {
-      const res = await explainDifferently({
-        contextText: rawText,
-        concept: `${card.front}\n${card.back}`,
-      });
+      const res = await explainDifferently({ contextText: rawText, concept });
       setAltExplanation({ cardIndex: index, text: res.explanation });
     } catch (err) {
       toast.error(err.message || "Couldn't get another explanation right now.");

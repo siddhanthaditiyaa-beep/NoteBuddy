@@ -13,6 +13,8 @@ import { listNotes, getProgress, getNote, getWeakTopics, searchNotes } from "../
 import { shareAchievementCard } from "../lib/achievementCard";
 import InsightsPanel from "../components/InsightsPanel";
 import SyllabusGapTracker from "../components/SyllabusGapTracker";
+import ClassHeatmap from "../components/ClassHeatmap";
+import StudyBuddyPanel from "../components/StudyBuddyPanel";
 import toast from "react-hot-toast";
 
 function getGreeting(user, notesCount, demo) {
@@ -248,8 +250,15 @@ export default function Dashboard() {
           {notes.length > 0 && <InsightsPanel />}
 
           {notes.length > 0 && (
-            <div className="mb-8">
+            <div className="mb-8 grid sm:grid-cols-2 gap-4">
               <SyllabusGapTracker />
+              <StudyBuddyPanel />
+            </div>
+          )}
+
+          {notes.length > 0 && (
+            <div className="mb-8">
+              <ClassHeatmap />
             </div>
           )}
 

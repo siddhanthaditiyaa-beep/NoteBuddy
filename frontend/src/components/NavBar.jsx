@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
-import { Sparkles, LogOut, ChevronDown, Menu, X, LayoutDashboard, Brain, Layers, Plus, Sun, Moon, CalendarDays, Bell, BellOff, Gift, ShieldAlert } from "lucide-react";
+import { Sparkles, LogOut, ChevronDown, Menu, X, LayoutDashboard, Brain, Layers, Plus, Sun, Moon, CalendarDays, Bell, BellOff, Gift, ShieldAlert, WifiOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useFontSize } from "../context/FontSizeContext";
@@ -10,6 +10,7 @@ import { isPushSupported, getPushSubscriptionStatus, enablePushReminders, disabl
 import { deleteAccount } from "../lib/api";
 import { LATEST_VERSION } from "../lib/changelog";
 import ChangelogPanel from "./ChangelogPanel";
+import OfflineAIModal from "./OfflineAIModal";
 
 const CHANGELOG_SEEN_KEY = "notebuddy_changelog_seen";
 
@@ -178,6 +179,7 @@ function AccountMenu() {
   const [pushStatus, setPushStatus] = useState("checking"); // checking | unsupported | enabled | disabled
   const [pushBusy, setPushBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [offlineAIOpen, setOfflineAIOpen] = useState(false);
 
   useEffect(() => {
     const onClickOutside = (e) => {
@@ -263,6 +265,15 @@ function AccountMenu() {
               </button>
             )}
             <button
+              onClick={() => {
+                setOpen(false);
+                setOfflineAIOpen(true);
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-ink/70 hover:bg-primary-50 transition-colors"
+            >
+              <WifiOff size={16} /> Offline AI
+            </button>
+            <button
               onClick={handleSignOut}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-coral-500 hover:bg-coral-50 transition-colors"
             >
@@ -283,6 +294,7 @@ function AccountMenu() {
         )}
       </AnimatePresence>
       <DeleteAccountModal open={deleteOpen} onClose={() => setDeleteOpen(false)} />
+      <OfflineAIModal open={offlineAIOpen} onClose={() => setOfflineAIOpen(false)} />
     </div>
   );
 }
