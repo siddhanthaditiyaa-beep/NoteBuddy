@@ -190,7 +190,7 @@ export default function Upload() {
                 ))}
               </div>
             </>
-          ) : (
+          ) : mode === "file" ? (
             <div
               onClick={() => fileInputRef.current?.click()}
               className="w-full h-48 rounded-xl2 bg-white shadow-card border-2 border-dashed border-primary-200 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-primary-400 transition-colors mb-6"
@@ -207,7 +207,7 @@ export default function Upload() {
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
             </div>
-          )}
+          ) : null}
 
           {mode === "audio" && (
             <div className="mb-6 space-y-4">
