@@ -383,6 +383,32 @@ def set_note_public(user_id: str, note_id: str, is_public: bool) -> dict | None:
     return result.data[0] if result.data else None
 
 
+# ---------------------------------------------------------------------------
+# Web Push subscriptions — due-flashcard reminders. One row per browser/
+# device the student enabled notifications on (a phone and a laptop are two
+# separate subscriptions, both tied to the same user_id).
+# ---------------------------------------------------------------------------
+
+
+def save_push_subscription(user_id: str, endpoint: str, p256dh: str, auth: str) -> None:
+    client = get_client()
+    client.table("push_subscriptions").upsert(
+        {"user_id": user_id, "endpoint": endpoint, "p256dh": p256dh, "auth": auth},
+        on_conflict="endpoint",
+    ).execute()
+
+
+def delete_push_subscription(endpoint: str) -> None:
+    client = get_client()
+    client.table("push_subscriptions").delete().eq("endpoint", endpoint).execute()
+
+
+def list_push_subscriptions() -> list[dict]:
+    client = get_client()
+    result = client.table("push_subscriptions").select("*").execute()
+    return result.data or []
+
+
 def get_public_note(note_id: str) -> dict | None:
     client = get_client()
     result = (

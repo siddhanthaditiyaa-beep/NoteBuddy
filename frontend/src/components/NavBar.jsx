@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, LogOut, ChevronDown, Menu, X, LayoutDashboard, Brain, Layers, Plus, Sun, Moon, CalendarDays } from "lucide-react";
+import toast from "react-hot-toast";
+import { Sparkles, LogOut, ChevronDown, Menu, X, LayoutDashboard, Brain, Layers, Plus, Sun, Moon, CalendarDays, Bell, BellOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { isPushSupported, getPushSubscriptionStatus, enablePushReminders, disablePushReminders } from "../lib/push";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -23,6 +25,8 @@ function AccountMenu() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
+  const [pushStatus, setPushStatus] = useState("checking"); // checking | unsupported | enabled | disabled
+  const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
     const onClickOutside = (e) => {
@@ -31,6 +35,29 @@ function AccountMenu() {
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (open) getPushSubscriptionStatus().then(setPushStatus);
+  }, [open]);
+
+  const togglePush = async () => {
+    setPushBusy(true);
+    try {
+      if (pushStatus === "enabled") {
+        await disablePushReminders();
+        setPushStatus("disabled");
+        toast.success("Flashcard reminders turned off.");
+      } else {
+        await enablePushReminders();
+        setPushStatus("enabled");
+        toast.success("You'll get a reminder when flashcards are due!");
+      }
+    } catch (e) {
+      toast.error(e.message || "Couldn't change reminder settings.");
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const handleSignOut = async () => {
     setOpen(false);
@@ -74,6 +101,16 @@ function AccountMenu() {
                 <p className="text-xs text-ink/40 truncate">{user?.email}</p>
               </div>
             </div>
+            {pushStatus !== "unsupported" && (
+              <button
+                onClick={togglePush}
+                disabled={pushBusy || pushStatus === "checking"}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-ink/70 hover:bg-primary-50 transition-colors disabled:opacity-50"
+              >
+                {pushStatus === "enabled" ? <BellOff size={16} /> : <Bell size={16} />}
+                {pushStatus === "enabled" ? "Turn off flashcard reminders" : "Remind me about due flashcards"}
+              </button>
+            )}
             <button
               onClick={handleSignOut}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-coral-500 hover:bg-coral-50 transition-colors"

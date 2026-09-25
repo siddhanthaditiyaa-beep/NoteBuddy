@@ -1,0 +1,17 @@
+name: Send due-flashcard reminders
+
+on:
+  schedule:
+    # 9:00am IST (03:30 UTC) every day.
+    - cron: "30 3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger due-reminder push notifications
+        run: |
+          curl -sf -X POST https://notebuddy-backend-92m7.onrender.com/api/push/send-due-reminders \
+            -H "X-Cron-Secret: ${{ secrets.PUSH_CRON_SECRET }}" \
+            || echo "Reminder send failed — backend may be waking up or PUSH_CRON_SECRET isn't set yet."
