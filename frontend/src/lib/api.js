@@ -14,10 +14,11 @@ async function handle(res) {
   return res.json();
 }
 
-export async function processNote({ userId, level, text, file }) {
+export async function processNote({ userId, level, text, file, quizCount = 5 }) {
   const form = new FormData();
   form.append("user_id", userId);
   form.append("level", level);
+  form.append("quiz_count", quizCount);
   if (file) form.append("file", file);
   else form.append("text", text);
 
@@ -28,10 +29,11 @@ export async function processNote({ userId, level, text, file }) {
   return handle(res);
 }
 
-export async function regenerateNote({ noteId, userId, level }) {
+export async function regenerateNote({ noteId, userId, level, quizCount = 5 }) {
   const form = new FormData();
   form.append("user_id", userId);
   form.append("level", level);
+  form.append("quiz_count", quizCount);
   const res = await fetch(`${API_BASE}/api/notes/${noteId}/regenerate`, {
     method: "POST",
     body: form,
@@ -63,17 +65,19 @@ export async function getProgress(userId) {
   return handle(res);
 }
 
-export async function combineNotes({ userId, noteIds, level }) {
+export async function combineNotes({ userId, noteIds, level, quizCount = 5 }) {
   const res = await fetch(`${API_BASE}/api/notes/combine`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user_id: userId, note_ids: noteIds, level }),
+    body: JSON.stringify({ user_id: userId, note_ids: noteIds, level, quiz_count: quizCount }),
   });
   return handle(res);
 }
 
-export async function getDueCards(userId) {
-  const res = await fetch(`${API_BASE}/api/review/due?user_id=${userId}`);
+export async function getDueCards(userId, noteId) {
+  const params = new URLSearchParams({ user_id: userId });
+  if (noteId) params.set("note_id", noteId);
+  const res = await fetch(`${API_BASE}/api/review/due?${params.toString()}`);
   return handle(res);
 }
 

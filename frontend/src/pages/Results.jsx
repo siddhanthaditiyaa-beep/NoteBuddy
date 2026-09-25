@@ -158,7 +158,10 @@ export default function Results() {
     if (!noteId) return; // Supabase not configured — nothing to regenerate against
     setRegenLoading(true);
     try {
-      const { study_kit } = await regenerateNote({ noteId, userId: user.id, level: newLevel });
+      // Keep the same number of quiz questions the learner originally chose,
+      // rather than silently resetting it back to the default of 5.
+      const quizCount = studyKit.quiz?.length || 5;
+      const { study_kit } = await regenerateNote({ noteId, userId: user.id, level: newLevel, quizCount });
       setStudyKit(study_kit);
     } finally {
       setRegenLoading(false);

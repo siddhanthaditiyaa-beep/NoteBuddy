@@ -10,9 +10,9 @@ router = APIRouter(prefix="/api/review", tags=["review"])
 
 
 @router.get("/due")
-async def due_cards(user_id: str):
+async def due_cards(user_id: str, note_id: str | None = None):
     try:
-        cards = supabase_client.get_due_flashcards(user_id)
+        cards = supabase_client.get_due_flashcards(user_id, note_id)
     except RuntimeError as e:
         raise HTTPException(503, str(e))
     return {"cards": cards, "count": len(cards)}

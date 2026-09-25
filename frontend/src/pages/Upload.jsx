@@ -2,9 +2,10 @@ import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
-import { UploadCloud, FileText, Image as ImageIcon, Wand2, Sparkles, Mic, Square, Play, Trash2 } from "lucide-react";
+import { UploadCloud, FileText, Image as ImageIcon, Wand2, Sparkles, Mic, Square, Play, Trash2, X } from "lucide-react";
 import NavBar from "../components/NavBar";
 import LevelSlider from "../components/LevelSlider";
+import QuizCountSlider from "../components/QuizCountSlider";
 import { useAuth } from "../context/AuthContext";
 import { processNote } from "../lib/api";
 
@@ -30,6 +31,7 @@ export default function Upload() {
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
   const [level, setLevel] = useState("beginner");
+  const [quizCount, setQuizCount] = useState(5);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef(null);
   const audioFileInputRef = useRef(null);
@@ -102,6 +104,7 @@ export default function Upload() {
       const result = await processNote({
         userId: user.id,
         level,
+        quizCount,
         text: mode === "text" ? text : undefined,
         file: mode === "text" ? undefined : file,
       });
@@ -192,20 +195,38 @@ export default function Upload() {
             </>
           ) : mode === "file" ? (
             <div
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full h-48 rounded-xl2 bg-white shadow-card border-2 border-dashed border-primary-200 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-primary-400 transition-colors mb-6"
+              onClick={() => !file && fileInputRef.current?.click()}
+              className={`relative w-full h-48 rounded-xl2 bg-white shadow-card border-2 border-dashed border-primary-200 flex flex-col items-center justify-center gap-2 transition-colors mb-6 ${
+                file ? "" : "cursor-pointer hover:border-primary-400"
+              }`}
             >
+              {file && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFile(null);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                  title="Remove file"
+                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-coral-50 text-coral-500 flex items-center justify-center hover:bg-coral-100 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              )}
               <UploadCloud size={32} className="text-primary-400" />
-              <p className="font-bold text-ink/60">
+              <p className="font-bold text-ink/60 px-6 text-center">
                 {file ? file.name : "Click to choose a PDF or image"}
               </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,image/*"
-                className="hidden"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              />
+              {!file && (
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,image/*"
+                  className="hidden"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
+              )}
             </div>
           ) : null}
 
@@ -270,24 +291,42 @@ export default function Upload() {
               </div>
 
               <div
-                onClick={() => audioFileInputRef.current?.click()}
-                className="w-full h-24 rounded-xl2 bg-white shadow-card border-2 border-dashed border-primary-200 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-primary-400 transition-colors"
+                onClick={() => !(file && !audioUrl) && audioFileInputRef.current?.click()}
+                className={`relative w-full h-24 rounded-xl2 bg-white shadow-card border-2 border-dashed border-primary-200 flex flex-col items-center justify-center gap-1 transition-colors ${
+                  file && !audioUrl ? "" : "cursor-pointer hover:border-primary-400"
+                }`}
               >
+                {file && !audioUrl && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFile(null);
+                      if (audioFileInputRef.current) audioFileInputRef.current.value = "";
+                    }}
+                    title="Remove file"
+                    className="absolute top-2 right-2 w-7 h-7 rounded-full bg-coral-50 text-coral-500 flex items-center justify-center hover:bg-coral-100 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
                 <UploadCloud size={22} className="text-primary-400" />
-                <p className="font-bold text-ink/60 text-sm">
+                <p className="font-bold text-ink/60 text-sm px-8 text-center">
                   {file && !audioUrl ? file.name : "Upload an audio file (mp3, wav, m4a...)"}
                 </p>
-                <input
-                  ref={audioFileInputRef}
-                  type="file"
-                  accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.aac,.flac"
-                  className="hidden"
-                  onChange={(e) => {
-                    const picked = e.target.files?.[0] ?? null;
-                    setFile(picked);
-                    setAudioUrl(null);
-                  }}
-                />
+                {!(file && !audioUrl) && (
+                  <input
+                    ref={audioFileInputRef}
+                    type="file"
+                    accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm,.aac,.flac"
+                    className="hidden"
+                    onChange={(e) => {
+                      const picked = e.target.files?.[0] ?? null;
+                      setFile(picked);
+                      setAudioUrl(null);
+                    }}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -295,6 +334,11 @@ export default function Upload() {
           <div data-tour="level-slider">
             <p className="text-sm font-bold text-ink/70 mb-2">How should NoteBuddy explain it?</p>
             <LevelSlider value={level} onChange={setLevel} />
+          </div>
+
+          <div className="mt-6">
+            <p className="text-sm font-bold text-ink/70 mb-2">How many quiz questions?</p>
+            <QuizCountSlider value={quizCount} onChange={setQuizCount} />
           </div>
 
           <button

@@ -15,6 +15,7 @@ async def process_note(
     level: str = Form("beginner"),
     text: str | None = Form(None),
     file: UploadFile | None = File(None),
+    quiz_count: int = Form(5),
 ):
     """Accepts either pasted text OR an uploaded file (PDF/image), runs OCR/
     extraction if needed, then asks Gemini to build the full study kit."""
@@ -36,7 +37,7 @@ async def process_note(
             "text directly, or a clearer photo/PDF.",
         )
 
-    study_kit = generate_study_kit(source_text, level=level)
+    study_kit = generate_study_kit(source_text, level=level, quiz_count=quiz_count)
 
     saved = None
     try:
@@ -59,6 +60,7 @@ class CombineRequest(BaseModel):
     user_id: str
     note_ids: list[str]
     level: str = "beginner"
+    quiz_count: int = 5
 
 
 @router.post("/combine")
@@ -85,7 +87,7 @@ async def combine_notes(req: CombineRequest):
         raise HTTPException(404, "Couldn't find enough of those notes to combine.")
 
     combined_text = "\n\n".join(sections)
-    study_kit = generate_study_kit(combined_text, level=req.level)
+    study_kit = generate_study_kit(combined_text, level=req.level, quiz_count=req.quiz_count)
     study_kit["title"] = f"Combined review: {', '.join(titles[:3])}" + (
         f" +{len(titles) - 3} more" if len(titles) > 3 else ""
     )
@@ -126,7 +128,12 @@ async def get_note(note_id: str, user_id: str):
 
 
 @router.post("/{note_id}/regenerate")
-async def regenerate_note(note_id: str, user_id: str = Form(...), level: str = Form(...)):
+async def regenerate_note(
+    note_id: str,
+    user_id: str = Form(...),
+    level: str = Form(...),
+    quiz_count: int = Form(5),
+):
     try:
         note = supabase_client.get_note(user_id, note_id)
     except RuntimeError as e:
@@ -134,5 +141,5 @@ async def regenerate_note(note_id: str, user_id: str = Form(...), level: str = F
     if not note:
         raise HTTPException(404, "Note not found")
 
-    study_kit = generate_study_kit(note["raw_text"], level=level)
+    study_kit = generate_study_kit(note["raw_text"], level=level, quiz_count=quiz_count)
     return {"study_kit": study_kit}

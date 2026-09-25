@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import { Brain, CheckCircle2, RotateCcw } from "lucide-react";
 import NavBar from "../components/NavBar";
 import { useAuth } from "../context/AuthContext";
-import { getDueCards, gradeCard } from "../lib/api";
+import { getDueCards, gradeCard, listNotes } from "../lib/api";
 
 // Maps the four learner-facing buttons to the 0-5 SM-2 quality scale.
 const GRADES = [
@@ -18,6 +18,8 @@ const GRADES = [
 export default function Review() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [notes, setNotes] = useState([]);
+  const [selectedNoteId, setSelectedNoteId] = useState(null); // null = "due today" across all notes
   const [cards, setCards] = useState(null); // null = loading
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -25,10 +27,20 @@ export default function Review() {
 
   useEffect(() => {
     if (!user) return;
-    getDueCards(user.id)
+    listNotes(user.id)
+      .then((res) => setNotes(res.notes || []))
+      .catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    setCards(null);
+    setIndex(0);
+    setFlipped(false);
+    getDueCards(user.id, selectedNoteId || undefined)
       .then((res) => setCards(res.cards || []))
       .catch(() => setCards([]));
-  }, [user]);
+  }, [user, selectedNoteId]);
 
   const current = cards?.[index];
 
@@ -60,16 +72,45 @@ export default function Review() {
           <div className="flex items-center gap-2 text-primary-600 font-bold text-sm mb-2">
             <Brain size={16} /> Spaced-repetition review
           </div>
-          <h1 className="font-display text-3xl font-extrabold mb-6">Review your flashcards</h1>
+          <h1 className="font-display text-3xl font-extrabold mb-4">Review your flashcards</h1>
+
+          {notes.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-6">
+              <button
+                onClick={() => setSelectedNoteId(null)}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  !selectedNoteId ? "bg-primary-500 text-white" : "bg-white text-ink/60 shadow-card"
+                }`}
+              >
+                Due today
+              </button>
+              {notes.map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => setSelectedNoteId(n.id)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all truncate max-w-[160px] ${
+                    selectedNoteId === n.id ? "bg-primary-500 text-white" : "bg-white text-ink/60 shadow-card"
+                  }`}
+                  title={n.title}
+                >
+                  {n.title}
+                </button>
+              ))}
+            </div>
+          )}
 
           {cards === null ? (
             <p className="text-ink/50 font-semibold text-center py-20">Loading your due cards...</p>
           ) : cards.length === 0 ? (
             <div className="bg-white rounded-xl2 shadow-card p-10 text-center">
               <CheckCircle2 className="mx-auto text-mint-500 mb-4" size={40} />
-              <p className="font-display font-bold text-lg mb-1">You're all caught up!</p>
+              <p className="font-display font-bold text-lg mb-1">
+                {selectedNoteId ? "This note has no flashcards" : "You're all caught up!"}
+              </p>
               <p className="text-sm font-semibold text-ink/50 mb-5">
-                No flashcards are due right now — come back later, or make a new study kit.
+                {selectedNoteId
+                  ? "This note doesn't have any flashcards to review."
+                  : "No flashcards are due right now — come back later, or make a new study kit."}
               </p>
               <button
                 onClick={() => navigate("/dashboard")}

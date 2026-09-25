@@ -95,14 +95,17 @@ def get_profile(user_id: str) -> dict:
 REVIEW_BATCH_LIMIT = 30
 
 
-def get_due_flashcards(user_id: str) -> list[dict]:
+def get_due_flashcards(user_id: str, note_id: str | None = None) -> list[dict]:
+    """With no note_id, returns cards that are genuinely due today (or brand
+    new) across every note — the normal spaced-repetition queue. With a
+    note_id, the learner explicitly asked to practice that one note right
+    now, so every one of its cards is returned regardless of schedule —
+    grading them still updates their SM-2 progress as usual."""
     client = get_client()
-    notes_result = (
-        client.table("notes")
-        .select("id, title, study_kit")
-        .eq("user_id", user_id)
-        .execute()
-    )
+    query = client.table("notes").select("id, title, study_kit").eq("user_id", user_id)
+    if note_id:
+        query = query.eq("id", note_id)
+    notes_result = query.execute()
     notes = notes_result.data or []
     if not notes:
         return []
@@ -125,6 +128,19 @@ def get_due_flashcards(user_id: str) -> list[dict]:
             key = (note["id"], idx)
             row = progress_by_key.get(key)
             is_new = row is None
+
+            if note_id:
+                # Ad-hoc single-note review — include every card, due or not.
+                due.append({
+                    "note_id": note["id"],
+                    "note_title": note["title"],
+                    "card_index": idx,
+                    "front": card.get("front", ""),
+                    "back": card.get("back", ""),
+                    "is_new": is_new,
+                })
+                continue
+
             if is_new:
                 due.append({
                     "note_id": note["id"],

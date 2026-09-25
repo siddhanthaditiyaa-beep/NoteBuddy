@@ -33,10 +33,11 @@ LEVEL_INSTRUCTIONS = {
 }
 
 
-def generate_study_kit(text: str, level: str = "beginner") -> dict:
+def generate_study_kit(text: str, level: str = "beginner", quiz_count: int = 5) -> dict:
     """One call that produces the full study kit: summary, key terms,
     flashcards, and a quiz — all tailored to the requested reading level."""
     level_instruction = LEVEL_INSTRUCTIONS.get(level, LEVEL_INSTRUCTIONS["beginner"])
+    quiz_count = quiz_count if quiz_count in (5, 10, 15, 20) else 5
 
     prompt = f"""You are NoteBuddy, an AI study assistant that helps students (including young or beginner learners) understand their study material.
 
@@ -73,7 +74,7 @@ Given the study material below, produce a JSON object with EXACTLY this shape an
 Rules:
 - key_terms: 4-8 items, most important terms only.
 - flashcards: 6-10 items, good for active recall.
-- quiz: 5 multiple-choice questions, exactly 4 options each, mix of difficulty.
+- quiz: exactly {quiz_count} multiple-choice questions, exactly 4 options each, mix of difficulty.
 - mind_map: 3-6 branches, each with 2-4 short children. Keep every label short enough to fit in a small box (a few words max).
 - Keep everything grounded in the material below. Do not invent facts not implied by it.
 
@@ -110,9 +111,9 @@ Reply as NoteBuddy:"""
     return response.text.strip()
 
 
-def regenerate_at_level(text: str, level: str) -> dict:
+def regenerate_at_level(text: str, level: str, quiz_count: int = 5) -> dict:
     """Used when the learner drags the difficulty slider after the fact."""
-    return generate_study_kit(text, level)
+    return generate_study_kit(text, level, quiz_count)
 
 
 def transcribe_audio(file_bytes: bytes, filename: str) -> str:
