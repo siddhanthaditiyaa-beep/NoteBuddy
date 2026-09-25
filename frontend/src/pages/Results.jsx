@@ -20,6 +20,8 @@ import {
   PenLine,
   Headphones,
   GraduationCap,
+  FileText,
+  Network,
 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import FlashcardDeck from "../components/FlashcardDeck";
@@ -27,6 +29,8 @@ import Quiz from "../components/Quiz";
 import ChatPanel from "../components/ChatPanel";
 import PracticeMode from "../components/PracticeMode";
 import TeachBackMode from "../components/TeachBackMode";
+import ExamTwin from "../components/ExamTwin";
+import KnowledgeGraph from "../components/KnowledgeGraph";
 import LevelSlider from "../components/LevelSlider";
 import { useAuth } from "../context/AuthContext";
 import { regenerateNote, shareNote, recordQuizAnswer } from "../lib/api";
@@ -55,6 +59,8 @@ const TABS = [
   { id: "flashcards", label: "Flashcards", icon: Layers },
   { id: "practice", label: "Practice", icon: PenLine },
   { id: "teachback", label: "Teach It Back", icon: GraduationCap },
+  { id: "exam", label: "Exam Twin", icon: FileText, requiresNoteId: true },
+  { id: "graph", label: "Concept Map", icon: Network, requiresNoteId: true },
   { id: "quiz", label: "Quiz", icon: ListChecks },
   { id: "mindmap", label: "Mind Map", icon: GitBranch },
   { id: "chat", label: "Ask NoteBuddy", icon: MessageCircle },
@@ -401,7 +407,7 @@ export default function Results() {
           </div>
 
           <div className="flex gap-2 mb-6 overflow-x-auto">
-            {TABS.map((t) => (
+            {TABS.filter((t) => !t.requiresNoteId || noteId).map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
@@ -454,6 +460,16 @@ export default function Results() {
                 {tab === "teachback" && (
                   <div className="bg-white rounded-xl2 shadow-card p-8">
                     <TeachBackMode cards={studyKit.flashcards} rawText={rawText} />
+                  </div>
+                )}
+                {tab === "exam" && noteId && (
+                  <div className="bg-white rounded-xl2 shadow-card p-8">
+                    <ExamTwin noteId={noteId} rawText={rawText} board={user?.user_metadata?.board} />
+                  </div>
+                )}
+                {tab === "graph" && noteId && (
+                  <div className="bg-white rounded-xl2 shadow-card p-8">
+                    <KnowledgeGraph noteId={noteId} />
                   </div>
                 )}
                 {tab === "quiz" && (

@@ -333,6 +333,31 @@ export async function getContradictions(noteIds) {
   return handle(res);
 }
 
+export async function generateExamTwin({ noteId, durationMinutes = 60, board }) {
+  const res = await fetch(`${API_BASE}/api/notes/${noteId}/exam-twin`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ duration_minutes: durationMinutes, board }),
+  });
+  return handle(res);
+}
+
+export async function getSyllabusGaps(syllabusText) {
+  const res = await fetch(`${API_BASE}/api/notes/syllabus-gaps`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ syllabus_text: syllabusText }),
+  });
+  return handle(res);
+}
+
+export async function getKnowledgeGraph(noteId) {
+  const res = await fetch(`${API_BASE}/api/notes/${noteId}/knowledge-graph`, {
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
 export async function searchNotes(query) {
   const res = await fetch(`${API_BASE}/api/notes/search`, {
     method: "POST",

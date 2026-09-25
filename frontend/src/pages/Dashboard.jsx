@@ -12,6 +12,7 @@ import { getBadgeVisual } from "../lib/badges";
 import { listNotes, getProgress, getNote, getWeakTopics, searchNotes } from "../lib/api";
 import { shareAchievementCard } from "../lib/achievementCard";
 import InsightsPanel from "../components/InsightsPanel";
+import SyllabusGapTracker from "../components/SyllabusGapTracker";
 import toast from "react-hot-toast";
 
 function getGreeting(user, notesCount, demo) {
@@ -245,6 +246,12 @@ export default function Dashboard() {
           )}
 
           {notes.length > 0 && <InsightsPanel />}
+
+          {notes.length > 0 && (
+            <div className="mb-8">
+              <SyllabusGapTracker />
+            </div>
+          )}
 
           {weakTopics.length > 0 && (
             <div className="mb-8 bg-white rounded-xl2 shadow-card p-5">

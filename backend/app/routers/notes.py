@@ -8,7 +8,10 @@ from app.config import MAX_UPLOAD_MB, MAX_AUDIO_MB, DAILY_GENERATION_LIMIT
 from app.services.extraction import extract_text
 from app.services.youtube_service import get_transcript_text, YouTubeImportError
 from app.services.embeddings_service import embed_and_store_note, search_notes
-from app.services.gemini_service import generate_study_kit, transcribe_audio, detect_contradictions, AIGenerationError
+from app.services.gemini_service import (
+    generate_study_kit, transcribe_audio, detect_contradictions,
+    generate_mock_exam, find_syllabus_gaps, build_knowledge_graph, AIGenerationError,
+)
 from app.services import supabase_client
 from app.services.supabase_client import DailyLimitExceeded
 
@@ -453,6 +456,76 @@ async def contradictions_route(
     except AIGenerationError:
         raise HTTPException(502, "Couldn't compare those notes right now — please try again.")
     return result
+
+
+class ExamTwinRequest(BaseModel):
+    duration_minutes: int = 60
+    board: str | None = None
+
+
+@router.post("/{note_id}/exam-twin")
+@limiter.limit("6/minute")
+async def exam_twin_route(
+    request: Request, note_id: str, req: ExamTwinRequest, current_user: CurrentUser = Depends(get_current_user)
+):
+    """Exam Twin — generates a full mock exam paper from a saved note,
+    structured like a real exam (sections, marks, mixed question types)
+    rather than just another quiz."""
+    try:
+        note = supabase_client.get_note(current_user.id, note_id)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    if not note:
+        raise HTTPException(404, "Note not found")
+    duration = max(15, min(180, req.duration_minutes))
+    try:
+        exam = generate_mock_exam(note.get("raw_text", ""), req.board, duration)
+    except AIGenerationError:
+        raise HTTPException(502, "Couldn't generate a mock exam right now — please try again.")
+    return exam
+
+
+class SyllabusGapsRequest(BaseModel):
+    syllabus_text: str
+
+
+@router.post("/syllabus-gaps")
+@limiter.limit("10/minute")
+async def syllabus_gaps_route(
+    request: Request, req: SyllabusGapsRequest, current_user: CurrentUser = Depends(get_current_user)
+):
+    """Syllabus Coverage Gap Tracker — checks a pasted syllabus/chapter
+    list against the student's actual saved notes and flags what's not
+    covered yet."""
+    if not req.syllabus_text or len(req.syllabus_text.strip()) < 10:
+        raise HTTPException(400, "Paste a bit more of your syllabus first.")
+    try:
+        notes = supabase_client.list_notes(current_user.id)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    try:
+        result = find_syllabus_gaps(req.syllabus_text, notes)
+    except AIGenerationError:
+        raise HTTPException(502, "Couldn't check your syllabus right now — please try again.")
+    return result
+
+
+@router.get("/{note_id}/knowledge-graph")
+@limiter.limit("15/minute")
+async def knowledge_graph_route(request: Request, note_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    """Visual Knowledge Graph — extracts key concepts and how they relate,
+    for an interactive concept map of a single note."""
+    try:
+        note = supabase_client.get_note(current_user.id, note_id)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    if not note:
+        raise HTTPException(404, "Note not found")
+    try:
+        graph = build_knowledge_graph(note.get("raw_text", ""))
+    except AIGenerationError:
+        raise HTTPException(502, "Couldn't build a concept map right now — please try again.")
+    return graph
 
 
 @router.get("/gallery")

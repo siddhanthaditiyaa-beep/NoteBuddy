@@ -417,6 +417,107 @@ Only report a contradiction or gap you can point to concrete evidence for in the
     return _call_gemini_json(prompt, {"contradictions", "gaps", "summary"}, max_attempts=2)
 
 
+# ---------------------------------------------------------------------------
+# Part 5 "signature wow" features — planning + visual group.
+# ---------------------------------------------------------------------------
+
+
+def generate_mock_exam(text: str, board: str | None, duration_minutes: int = 60) -> dict:
+    """Exam Twin: a full mock exam paper (sections, mixed question types,
+    marks allocation, model answers for grading) in the style of a real
+    exam paper — not just another quiz, something a student could actually
+    sit and time themselves on."""
+    board_note = _board_instruction(board)
+    prompt = f"""You are NoteBuddy, generating a realistic MOCK EXAM PAPER from a student's notes — something structured like an actual exam they'd sit, not just another quiz.{board_note}
+
+SOURCE MATERIAL:
+\"\"\"
+{text[:12000]}
+\"\"\"
+
+Target total time: {duration_minutes} minutes.
+
+Respond with ONLY a JSON object in exactly this shape (no markdown fences, no commentary):
+{{
+  "title": "exam paper title, e.g. 'Mock Exam: <subject/topic>'",
+  "duration_minutes": {duration_minutes},
+  "total_marks": <sum of every question's marks>,
+  "sections": [
+    {{
+      "name": "e.g. 'Section A — Multiple Choice'",
+      "instructions": "1 short sentence of instructions for this section",
+      "questions": [
+        {{"type": "mcq", "question": "...", "options": ["...", "...", "...", "..."], "correct_index": 0, "marks": 1}},
+        {{"type": "short", "question": "...", "marks": 3, "model_answer": "a concise correct answer, 1-3 sentences"}},
+        {{"type": "long", "question": "...", "marks": 8, "model_answer": "a fuller model answer covering the key points expected, a short paragraph"}}
+      ]
+    }}
+  ]
+}}
+
+Rules:
+- 3 sections: multiple choice (several 1-mark questions), short-answer (2-4 mark questions), and long-answer (6-10 mark questions).
+- Every question must be answerable from the source material above — never invent facts not present in it.
+- Vary difficulty realistically, like a real exam: some easy recall questions, some that require connecting two ideas."""
+    return _call_gemini_json(prompt, {"title", "duration_minutes", "total_marks", "sections"}, max_attempts=2)
+
+
+def find_syllabus_gaps(syllabus_text: str, note_summaries: list[dict]) -> dict:
+    """Syllabus Coverage Gap Tracker: compares a syllabus/chapter list the
+    student pastes in against the subjects/titles of notes they've actually
+    made, and names what's still missing — catching "I never actually made
+    notes on Chapter 7" before it becomes an exam-day surprise."""
+    notes_list = "\n".join(f"- {n.get('title', 'Untitled')} ({n.get('subject', 'General')})" for n in note_summaries[:40]) or "(no notes saved yet)"
+    prompt = f"""You are NoteBuddy, checking a student's syllabus against the notes they've actually made, to find what's still missing.
+
+SYLLABUS / TOPIC LIST THE STUDENT PASTED IN:
+\"\"\"
+{syllabus_text[:4000]}
+\"\"\"
+
+THE STUDENT'S SAVED NOTES (title and subject only — you don't have their full content, just judge by title/subject relevance):
+{notes_list}
+
+Respond with ONLY a JSON object in exactly this shape (no markdown fences, no commentary):
+{{
+  "covered": ["syllabus topic that clearly has a matching note", "..."],
+  "missing": ["syllabus topic with no matching note — these need attention", "..."],
+  "summary": "1-2 encouraging sentences on overall coverage, e.g. how many of X topics are covered"
+}}
+Match loosely by meaning, not exact wording (a note titled "Cell Division" covers a syllabus line "Mitosis and meiosis"). If the syllabus text isn't really a list of topics, do your best to extract topic-like items from it anyway."""
+    return _call_gemini_json(prompt, {"covered", "missing", "summary"}, max_attempts=2)
+
+
+def build_knowledge_graph(text: str) -> dict:
+    """Visual Knowledge Graph: extracts the key concepts in a note and how
+    they relate to each other, for an interactive node/edge map — turns a
+    linear wall of notes into a picture of how the ideas actually connect,
+    which is often the thing that makes a topic finally click."""
+    prompt = f"""You are NoteBuddy, extracting a CONCEPT MAP from a student's notes — the key ideas and how they connect to each other.
+
+SOURCE MATERIAL:
+\"\"\"
+{text[:8000]}
+\"\"\"
+
+Respond with ONLY a JSON object in exactly this shape (no markdown fences, no commentary):
+{{
+  "nodes": [
+    {{"id": "short_slug", "label": "Short display name (2-4 words)"}}
+  ],
+  "edges": [
+    {{"source": "short_slug_a", "target": "short_slug_b", "relation": "short verb phrase, e.g. 'causes', 'is a type of', 'depends on'"}}
+  ]
+}}
+
+Rules:
+- 8-16 nodes — the genuinely important concepts, not every noun in the text.
+- Every edge's source and target must be an id that exists in nodes.
+- Keep the graph CONNECTED where the material supports it — avoid isolated nodes with no edges unless the material genuinely doesn't relate them to anything else.
+- ids must be short, lowercase, underscore-separated slugs unique within the list."""
+    return _call_gemini_json(prompt, {"nodes", "edges"}, max_attempts=2)
+
+
 def transcribe_audio(file_bytes: bytes, filename: str) -> str:
     """Turns an uploaded (or recorded) audio clip — a lecture, a voice memo of
     notes, etc. — into a plain-text transcript, using Gemini's native audio

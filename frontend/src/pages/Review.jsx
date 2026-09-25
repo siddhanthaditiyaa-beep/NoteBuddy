@@ -2,10 +2,37 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
-import { Brain, CheckCircle2, RotateCcw, Timer, Pause, Play, SkipForward } from "lucide-react";
+import { Brain, CheckCircle2, RotateCcw, Timer, Pause, Play, SkipForward, Mic, MicOff } from "lucide-react";
 import NavBar from "../components/NavBar";
 import { useAuth } from "../context/AuthContext";
 import { getDueCards, gradeCard, listNotes } from "../lib/api";
+
+const SpeechRecognitionAPI =
+  typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
+
+function speak(text, onEnd) {
+  if (!("speechSynthesis" in window) || !text) {
+    onEnd?.();
+    return;
+  }
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1;
+  utterance.onend = () => onEnd?.();
+  utterance.onerror = () => onEnd?.();
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
+}
+
+// Grade-command words a student might actually say out loud, roughly in
+// order of how "I got it wrong" -> "I got it easily" would come out
+// naturally, mapped to the same 0-5 SM-2 scale the on-screen buttons use.
+const VOICE_GRADE_WORDS = [
+  { words: ["easy", "easily", "nailed it"], quality: 5 },
+  { words: ["good", "got it", "correct"], quality: 4 },
+  { words: ["hard", "struggled", "barely"], quality: 3 },
+  { words: ["again", "forgot", "no", "wrong", "missed it"], quality: 0 },
+];
+const REVEAL_WORDS = ["reveal", "show", "flip", "answer"];
 
 const FOCUS_SECONDS = 25 * 60;
 const BREAK_SECONDS = 5 * 60;
@@ -122,6 +149,9 @@ export default function Review() {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [grading, setGrading] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef(null);
 
   useEffect(() => {
     if (!user) return;
@@ -161,14 +191,105 @@ export default function Review() {
     }
   };
 
+  // Voice-First Hands-Free Review Mode — reads each card aloud, listens for
+  // a spoken command to reveal the answer, reads that aloud too, then
+  // listens for a spoken grade ("easy"/"good"/"hard"/"again"). Lets a
+  // student review flashcards without touching their phone at all — while
+  // walking, doing chores, whatever.
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    setListening(false);
+  };
+
+  const listenFor = (matchers, onMatch) => {
+    if (!SpeechRecognitionAPI) return;
+    stopListening();
+    const recognition = new SpeechRecognitionAPI();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    let handled = false;
+
+    recognition.onresult = (e) => {
+      const transcript = (e.results?.[0]?.[0]?.transcript || "").toLowerCase();
+      for (const m of matchers) {
+        if (m.words.some((w) => transcript.includes(w))) {
+          handled = true;
+          onMatch(m.quality);
+          break;
+        }
+      }
+    };
+    recognition.onend = () => {
+      setListening(false);
+      if (!handled) {
+        // Nothing recognized this round — the student can still use the
+        // on-screen controls, or the mic button to try again.
+      }
+    };
+    recognition.onerror = () => setListening(false);
+
+    recognitionRef.current = recognition;
+    setListening(true);
+    try {
+      recognition.start();
+    } catch {
+      setListening(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!voiceMode || !current) return;
+    if (!flipped) {
+      speak(current.front, () => {
+        listenFor(
+          [{ words: REVEAL_WORDS, quality: null }],
+          () => setFlipped(true)
+        );
+      });
+    } else {
+      speak(`${current.back}. How did you do?`, () => {
+        listenFor(VOICE_GRADE_WORDS, (quality) => grade(quality));
+      });
+    }
+    return stopListening;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceMode, current?.note_id, current?.card_index, flipped]);
+
+  useEffect(() => {
+    if (!voiceMode) {
+      window.speechSynthesis?.cancel();
+      stopListening();
+    }
+    return () => {
+      window.speechSynthesis?.cancel();
+      stopListening();
+    };
+  }, [voiceMode]);
+
   return (
     <div className="min-h-screen blob-bg relative overflow-hidden">
       <div className="absolute top-24 -right-10 w-24 h-24 rounded-full bg-mint-400/20 animate-float hidden md:block" />
       <NavBar />
       <div className="max-w-xl mx-auto px-6 py-12 relative">
         <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="flex items-center gap-2 text-primary-600 font-bold text-sm mb-2">
-            <Brain size={16} /> Spaced-repetition review
+          <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+            <div className="flex items-center gap-2 text-primary-600 font-bold text-sm">
+              <Brain size={16} /> Spaced-repetition review
+            </div>
+            {SpeechRecognitionAPI && (
+              <button
+                onClick={() => setVoiceMode((v) => !v)}
+                title={voiceMode ? "Turn off voice-first review" : "Turn on voice-first review — hands-free, spoken flashcards"}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all ${
+                  voiceMode ? "bg-primary-500 text-white" : "bg-white shadow-card text-ink/60"
+                }`}
+              >
+                {voiceMode ? <Mic size={13} /> : <MicOff size={13} />}
+                Voice mode {voiceMode ? (listening ? "· listening..." : "on") : "off"}
+              </button>
+            )}
           </div>
           <h1 className="font-display text-3xl font-extrabold mb-4">Review your flashcards</h1>
 
