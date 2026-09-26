@@ -84,7 +84,11 @@ export default function ChatPanel({ rawText, language = "English" }) {
         const reply = await askOfflineAI(systemPrompt, question);
         setMessages((m) => [...m, { role: "assistant", content: reply || "I couldn't come up with an answer to that." }]);
       } catch (e) {
-        setMessages((m) => [...m, { role: "assistant", content: "The offline model hit a snag answering that — try rephrasing?" }]);
+        // Surface the real reason (e.g. "the engine hasn't been cached on
+        // this device yet") instead of a one-size-fits-all message that
+        // hid genuine, actionable errors behind "try rephrasing" — which
+        // made this look broken in a way that phrasing could never fix.
+        setMessages((m) => [...m, { role: "assistant", content: e.message || "The offline model hit a snag answering that — try rephrasing?" }]);
       } finally {
         setLoading(false);
       }

@@ -3,6 +3,7 @@ in as the demo user, the frontend calls this to wipe their previous notes
 and XP so each demo run starts from a clean slate.
 """
 
+import asyncio
 from fastapi import APIRouter, HTTPException, Depends
 from app.auth import get_current_user, CurrentUser
 from app.services import supabase_client
@@ -31,13 +32,23 @@ async def reset_demo(current_user: CurrentUser = Depends(get_current_user)):
     # weak-topics list forever, even right after a "fresh" demo reset, since
     # topic_progress is keyed by (user_id, term), not tied to any note that
     # got deleted. Clearing all of it now actually starts from a clean slate.
-    for table in ("notes", "flashcard_progress", "topic_progress", "quiz_answer_log"):
+    #
+    # These 5 deletes used to run one at a time, each a full network
+    # round-trip to Supabase — on a slow connection (or a cold-started free
+    # backend) that adds up to real, felt latency on every single demo
+    # login. supabase-py's client is synchronous, so asyncio.to_thread lets
+    # all 5 actually run concurrently instead of queued behind each other.
+    def _delete(table: str, column: str, value: str) -> None:
         try:
-            client.table(table).delete().eq("user_id", current_user.id).execute()
+            client.table(table).delete().eq(column, value).execute()
         except Exception:
             pass  # best-effort — a missing/renamed table shouldn't block the rest of the reset
-    try:
-        client.table("profiles").delete().eq("id", current_user.id).execute()  # profiles is keyed by id, not user_id
-    except Exception:
-        pass
+
+    await asyncio.gather(
+        *(
+            asyncio.to_thread(_delete, table, "user_id", current_user.id)
+            for table in ("notes", "flashcard_progress", "topic_progress", "quiz_answer_log")
+        ),
+        asyncio.to_thread(_delete, "profiles", "id", current_user.id),  # profiles is keyed by id, not user_id
+    )
     return {"status": "reset"}

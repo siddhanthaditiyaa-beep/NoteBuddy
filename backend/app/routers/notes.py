@@ -7,6 +7,7 @@ from app.rate_limit import limiter
 from app.config import MAX_UPLOAD_MB, MAX_AUDIO_MB, DAILY_GENERATION_LIMIT
 from app.services.extraction import extract_text
 from app.services.youtube_service import get_transcript_text, YouTubeImportError
+from app.services.drive_service import download_drive_file, DriveImportError
 from app.services.embeddings_service import embed_and_store_note, search_notes
 from app.services.gemini_service import (
     generate_study_kit, transcribe_audio, detect_contradictions,
@@ -17,7 +18,13 @@ from app.services.supabase_client import DailyLimitExceeded
 
 router = APIRouter(prefix="/api/notes", tags=["notes"])
 
-AUDIO_EXTENSIONS = (".mp3", ".wav", ".m4a", ".ogg", ".oga", ".webm", ".aac", ".flac", ".mp4")
+AUDIO_EXTENSIONS = (
+    ".mp3", ".wav", ".m4a", ".ogg", ".oga", ".webm", ".aac", ".flac",
+    # Video containers go through the exact same path — Gemini's file understanding
+    # takes video directly and works from its audio track same as a plain audio clip,
+    # which is what actually lets a whole recorded lecture video become a study kit.
+    ".mp4", ".mov", ".mkv", ".m4v", ".avi",
+)
 DOC_EXTENSIONS = (".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".txt")
 ALLOWED_EXTENSIONS = AUDIO_EXTENSIONS + DOC_EXTENSIONS
 
@@ -114,6 +121,56 @@ async def youtube_transcript(
     except YouTubeImportError as e:
         raise HTTPException(422, str(e))
     return result
+
+
+class DriveImportRequest(BaseModel):
+    url: str
+
+
+@router.post("/drive-import")
+@limiter.limit("10/minute")
+async def drive_import(
+    request: Request, req: DriveImportRequest, current_user: CurrentUser = Depends(get_current_user)
+):
+    """Lets a student paste a Google Drive share link — a recorded lecture
+    video/audio file, a PDF, or a scanned photo — instead of downloading it
+    locally and re-uploading it. Runs it through the exact same
+    transcription/OCR pipeline as a direct upload, just sourced from Drive
+    server-side, and always returns editable text for review before
+    anything is spent on actual study-kit generation (same pattern as the
+    YouTube-transcript and PDF/photo-extraction flows above)."""
+    if not req.url or not req.url.strip():
+        raise HTTPException(400, "Paste a Google Drive link first.")
+
+    try:
+        raw_bytes, filename = download_drive_file(req.url.strip())
+    except DriveImportError as e:
+        raise HTTPException(422, str(e))
+
+    filename_lower = filename.lower()
+    if not filename_lower.endswith(ALLOWED_EXTENSIONS):
+        raise HTTPException(415, "That Drive file isn't a supported type — share a PDF, image, or audio/video file.")
+
+    is_audio = filename_lower.endswith(AUDIO_EXTENSIONS)
+    size_cap_mb = MAX_AUDIO_MB if is_audio else MAX_UPLOAD_MB
+    if len(raw_bytes) > size_cap_mb * 1024 * 1024:
+        raise HTTPException(
+            413,
+            f"That file is too large — please keep {'audio/video files' if is_audio else 'files'} under {size_cap_mb:.0f}MB.",
+        )
+
+    if is_audio:
+        try:
+            text = transcribe_audio(raw_bytes, filename)
+        except AIGenerationError:
+            raise HTTPException(502, "Couldn't transcribe that file right now — please try again in a moment.")
+    else:
+        text = extract_text(filename, raw_bytes)
+
+    if not text or len(text.strip()) < 20:
+        raise HTTPException(422, "Couldn't find enough readable content in that file.")
+
+    return {"text": text, "filename": filename}
 
 
 @router.post("/process")

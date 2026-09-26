@@ -35,11 +35,46 @@ export function isWebGPUSupported() {
 // instead of a raw, unhandled fetch error.
 async function loadWebLLM() {
   try {
-    return await import("@mlc-ai/web-llm");
+    const webllm = await import("@mlc-ai/web-llm");
+    primeOfflineRuntimeCache();
+    return webllm;
   } catch {
     throw new Error(
       "Offline AI's engine hasn't been cached on this device yet — reconnect to the internet, reopen NoteBuddy once so it can fetch it, then try Offline AI again."
     );
+  }
+}
+
+// Belt-and-suspenders alongside the service worker's own CacheFirst route
+// for this chunk (src/sw.js): rather than trust that the SW was already
+// installed, activated, AND controlling this exact page load in time to
+// intercept the import() above (there's a real race the very first time a
+// tab loads after a fresh install), explicitly find the chunk's own URL
+// from the Performance API and cache it ourselves, directly via the page's
+// own Cache Storage access — same cache name the SW route reads from, so
+// either one finding it there first is enough. Best-effort: this must
+// never throw or block the actual offline-AI flow if anything here fails.
+function primeOfflineRuntimeCache() {
+  if (typeof caches === "undefined" || typeof performance === "undefined") return;
+  try {
+    const entry = performance
+      .getEntriesByType("resource")
+      .reverse() // most recent first — there may be older entries with the same name from earlier navigations
+      .find((r) => {
+        try {
+          return /\/assets\/lib-.*\.js$/.test(new URL(r.name).pathname);
+        } catch {
+          return false;
+        }
+      });
+    if (!entry) return;
+    caches.open("notebuddy-offline-ai-runtime").then((cache) =>
+      cache.match(entry.name).then((hit) => {
+        if (!hit) cache.add(entry.name).catch(() => {});
+      })
+    );
+  } catch {
+    /* best-effort only */
   }
 }
 

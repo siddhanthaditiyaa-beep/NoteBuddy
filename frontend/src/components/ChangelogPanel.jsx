@@ -1,9 +1,20 @@
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Sparkles, X } from "lucide-react";
 import { CHANGELOG } from "../lib/changelog";
 
 export default function ChangelogPanel({ open, onClose }) {
-  return (
+  // Portalled straight to <body> — this is rendered from inside NavBar's
+  // <nav>, and that nav has backdrop-blur-md (a backdrop-filter). Per the
+  // CSS spec, any ancestor with a filter/backdrop-filter becomes the
+  // containing block for `position: fixed` descendants, so this panel's
+  // "fixed inset-0" was being sized against the nav bar's own thin strip
+  // instead of the real viewport — it looked like it was spilling out
+  // above/below the top nav ("beyond the chrome tab") no matter how the
+  // panel's own centering/height math was tuned, because the math was
+  // right but the box it was measured against was wrong. A portal escapes
+  // that containing block entirely.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -75,6 +86,7 @@ export default function ChangelogPanel({ open, onClose }) {
           </div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

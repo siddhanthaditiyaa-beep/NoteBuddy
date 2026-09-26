@@ -14,3 +14,4 @@ pywebpush==2.0.1
 opencv-python-headless==4.10.0.84
 numpy==1.26.4
 youtube-transcript-api==1.2.4
+gdown==6.4.0

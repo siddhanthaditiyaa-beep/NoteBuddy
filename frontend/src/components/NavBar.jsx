@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
@@ -68,7 +69,14 @@ function DeleteAccountModal({ open, onClose }) {
     }
   };
 
-  return (
+  // Portalled to <body> — this modal is rendered from AccountMenu, which
+  // sits inside NavBar's <nav>, and that nav has backdrop-blur-md. A
+  // backdrop-filter on an ancestor becomes the containing block for
+  // `position: fixed` descendants (per spec — same rule as `transform`),
+  // so un-portalled, this dialog's "fixed inset-0" was being measured
+  // against the nav bar's own strip instead of the actual viewport. That's
+  // what showed up as the popup "going beyond the chrome tab."
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -133,7 +141,8 @@ function DeleteAccountModal({ open, onClose }) {
           </div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 
@@ -159,7 +168,8 @@ function ResetProgressModal({ open, onClose }) {
     }
   };
 
-  return (
+  // Same portal fix as DeleteAccountModal above — see its comment.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -212,7 +222,8 @@ function ResetProgressModal({ open, onClose }) {
           </div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 

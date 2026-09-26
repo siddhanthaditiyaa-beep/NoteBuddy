@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { WifiOff, X, Download, CheckCircle2, Trash2, Loader2 } from "lucide-react";
@@ -34,7 +35,12 @@ export default function OfflineAIModal({ open, onClose }) {
     toast.success("Offline AI removed.");
   };
 
-  return (
+  // Portalled to <body> — NavBar's <nav> uses backdrop-blur-md, and a
+  // backdrop-filter on an ancestor becomes the containing block for any
+  // `position: fixed` descendant. Left un-portalled, this modal's overlay
+  // was being sized against the nav bar's own strip instead of the real
+  // viewport, which is what "goes beyond the chrome tab" actually was.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -131,6 +137,7 @@ export default function OfflineAIModal({ open, onClose }) {
           </div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

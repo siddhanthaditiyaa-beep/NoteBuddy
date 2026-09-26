@@ -4,14 +4,14 @@ import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import {
   UploadCloud, FileText, Image as ImageIcon, Wand2, Sparkles, Mic, Square, Play, Trash2, X, Zap,
-  Camera, FolderOpen, Loader2, ArrowLeft, FileWarning, Video,
+  Camera, FolderOpen, Loader2, ArrowLeft, FileWarning, Video, Film, HardDrive,
 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import LevelSlider from "../components/LevelSlider";
 import QuizCountSlider from "../components/QuizCountSlider";
 import LanguageSelector from "../components/LanguageSelector";
 import { useAuth } from "../context/AuthContext";
-import { processNoteStream, extractText, getYoutubeTranscript } from "../lib/api";
+import { processNoteStream, extractText, getYoutubeTranscript, importFromDrive } from "../lib/api";
 
 // A wider bank than just 3 examples so a student's stated subject (from the
 // signup question, see onboarding personalization) can surface a matching
@@ -151,6 +151,31 @@ export default function Upload() {
     }
   };
 
+  // --- Drive-link mode ------------------------------------------------------
+  const [driveUrl, setDriveUrl] = useState("");
+  const [importingDrive, setImportingDrive] = useState(false);
+
+  const handleDriveImport = async () => {
+    if (!driveUrl.trim()) {
+      toast.error("Paste a Google Drive link first.");
+      return;
+    }
+    setImportingDrive(true);
+    try {
+      const res = await importFromDrive(driveUrl.trim());
+      setText(res.text);
+      setMode("text"); // reuse the normal paste-text review/edit flow, same as YouTube
+      toast.success("Imported from Drive — review it below, then generate!");
+    } catch (e) {
+      toast.error(e.message || "Couldn't import that Drive file.");
+    } finally {
+      setImportingDrive(false);
+    }
+  };
+
+  // --- Video-upload mode (shares `file` state with Audio mode below) --------
+  const videoFileInputRef = useRef(null);
+
   // --- Audio mode ---------------------------------------------------------
   const [file, setFile] = useState(null);
   const [recording, setRecording] = useState(false);
@@ -200,6 +225,7 @@ export default function Upload() {
     setFile(null);
     setAudioUrl(null);
     setYoutubeUrl("");
+    setDriveUrl("");
     resetPages();
   };
 
@@ -276,17 +302,22 @@ export default function Upload() {
       toast.error("Record or upload an audio clip first.");
       return;
     }
+    if (mode === "video" && !file) {
+      toast.error("Upload a lecture video first.");
+      return;
+    }
     setLoading(true);
-    setStage(mode === "file" ? "generating" : "extracting"); // file text is already extracted by this point; audio/text start at "generating" too once the stream opens
+    setStage(mode === "file" ? "generating" : "extracting"); // file text is already extracted by this point; audio/video/text start at "generating" too once the stream opens
     try {
+      const isFileMode = mode === "audio" || mode === "video";
       const result = await processNoteStream({
         userId: user.id,
         level,
         quizCount,
         language,
         mode: cramMode ? "cram" : "full",
-        text: mode === "audio" ? undefined : effectiveText,
-        file: mode === "audio" ? file : undefined,
+        text: isFileMode ? undefined : effectiveText,
+        file: isFileMode ? file : undefined,
         board: user?.user_metadata?.board,
         onStage: setStage,
       });
@@ -337,12 +368,13 @@ export default function Upload() {
             Paste your notes, or upload a PDF / photo — NoteBuddy will build your study kit.
           </p>
 
-          {/* 2-column grid on phones — 4 flex-1 buttons in one flex-wrap row don't
+          {/* 2-column grid on phones — flex-1 buttons in one flex-wrap row don't
               have room for icon + label at once on a ~360-390px screen, so they
               wrapped unevenly and cut off mid-word. A grid gives each button its
-              own full-width cell up to the sm breakpoint, where it reverts to a
-              single row. */}
-          <div className="grid grid-cols-2 sm:flex gap-2 mb-5" data-tour="mode-toggle">
+              own cell up to the sm breakpoint, where it switches to a wrapping
+              flex row (6 buttons no longer fit one row on desktop either, so
+              flex-wrap here — not a hard single line — is the actual fix). */}
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-5" data-tour="mode-toggle">
             <button
               onClick={() => switchMode("text")}
               className={`sm:flex-1 py-3 px-2 rounded-xl2 font-bold text-sm sm:text-base flex items-center justify-center gap-1.5 sm:gap-2 border-2 transition-all ${
@@ -374,6 +406,22 @@ export default function Upload() {
               }`}
             >
               <Video size={17} className="shrink-0" /> <span className="truncate">YouTube</span>
+            </button>
+            <button
+              onClick={() => switchMode("video")}
+              className={`sm:flex-1 py-3 px-2 rounded-xl2 font-bold text-sm sm:text-base flex items-center justify-center gap-1.5 sm:gap-2 border-2 transition-all ${
+                mode === "video" ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-primary-100 text-ink/60"
+              }`}
+            >
+              <Film size={17} className="shrink-0" /> <span className="truncate">Upload video</span>
+            </button>
+            <button
+              onClick={() => switchMode("drive")}
+              className={`sm:flex-1 py-3 px-2 rounded-xl2 font-bold text-sm sm:text-base flex items-center justify-center gap-1.5 sm:gap-2 border-2 transition-all ${
+                mode === "drive" ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-primary-100 text-ink/60"
+              }`}
+            >
+              <HardDrive size={17} className="shrink-0" /> <span className="truncate">Drive link</span>
             </button>
           </div>
 
@@ -561,6 +609,85 @@ export default function Upload() {
                     </>
                   ) : (
                     "Fetch transcript"
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mode === "video" && (
+            <div className="mb-6 space-y-3">
+              <div
+                onClick={() => !file && videoFileInputRef.current?.click()}
+                className={`relative w-full rounded-xl2 bg-white shadow-card border-2 border-dashed border-primary-200 flex flex-col items-center justify-center gap-2 py-10 transition-colors ${
+                  file ? "" : "cursor-pointer hover:border-primary-400"
+                }`}
+              >
+                {file && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFile(null);
+                      if (videoFileInputRef.current) videoFileInputRef.current.value = "";
+                    }}
+                    title="Remove file"
+                    className="absolute top-2 right-2 w-7 h-7 rounded-full bg-coral-50 text-coral-500 flex items-center justify-center hover:bg-coral-100 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+                <Film size={26} className="text-primary-400" />
+                <p className="font-bold text-ink/60 text-sm px-8 text-center">
+                  {file ? file.name : "Upload a lecture video (mp4, mov, mkv, webm...)"}
+                </p>
+                <p className="text-xs font-semibold text-ink/40 px-8 text-center">
+                  NoteBuddy transcribes the spoken audio and builds your study kit from it.
+                </p>
+                {!file && (
+                  <input
+                    ref={videoFileInputRef}
+                    type="file"
+                    accept="video/*,.mp4,.mov,.mkv,.webm,.m4v,.avi"
+                    className="hidden"
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
+          {mode === "drive" && (
+            <div className="mb-6 space-y-3">
+              <div className="w-full rounded-xl2 bg-white shadow-card p-5">
+                <div className="w-12 h-12 rounded-xl2 bg-mint-50 flex items-center justify-center text-mint-600 mb-3">
+                  <HardDrive size={22} />
+                </div>
+                <p className="font-bold text-ink/70 mb-1">Paste a Google Drive link</p>
+                <p className="text-xs font-semibold text-ink/40 mb-3">
+                  Works for a PDF, photo, or a recorded lecture video/audio file — make sure it's shared as
+                  "Anyone with the link".
+                </p>
+                <input
+                  type="url"
+                  value={driveUrl}
+                  onChange={(e) => setDriveUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleDriveImport()}
+                  placeholder="https://drive.google.com/file/d/..."
+                  aria-label="Google Drive file link"
+                  className="w-full mb-3 px-4 py-2.5 rounded-xl2 bg-primary-50 outline-none font-semibold text-sm focus:ring-2 focus:ring-primary-300"
+                />
+                <button
+                  onClick={handleDriveImport}
+                  disabled={importingDrive}
+                  className="w-full py-3 rounded-xl2 bg-primary-500 text-white font-bold text-sm shadow-soft hover:bg-primary-600 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+                >
+                  {importingDrive ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" /> Importing from Drive...
+                    </>
+                  ) : (
+                    "Import from Drive"
                   )}
                 </button>
               </div>

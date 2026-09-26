@@ -130,6 +130,20 @@ export async function getYoutubeTranscript(url) {
   return handle(res);
 }
 
+// Free — no Gemini call for docs/images (OCR), one transcription call for
+// audio/video — pulls a file straight from a Google Drive share link
+// server-side, so a student never has to download it locally just to
+// re-upload it. Returns editable text, same review-before-generating flow
+// as the YouTube transcript and PDF/photo extraction.
+export async function importFromDrive(url) {
+  const res = await fetch(`${API_BASE}/api/notes/drive-import`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ url }),
+  });
+  return handle(res);
+}
+
 export async function regenerateNote({ noteId, userId, level, quizCount = 5, language = "English", useWeakTopics = false }) {
   const form = new FormData();
   form.append("user_id", userId);
