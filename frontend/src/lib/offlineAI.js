@@ -25,10 +25,22 @@ export function isWebGPUSupported() {
 
 // Lazily imports the (large) web-llm library only when offline AI is
 // actually used — it should never be part of the main app bundle that
-// every visitor downloads just to load the landing page.
+// every visitor downloads just to load the landing page. The service
+// worker (src/sw.js) caches this specific chunk cache-first the first time
+// it's fetched, so it survives future truly-offline sessions — but if
+// someone goes offline before that first successful fetch ever happens
+// (e.g. testing Offline AI in airplane mode without ever having opened the
+// "Download Offline AI" flow on this device while online), the browser has
+// nothing to load it from. Give that case an honest, actionable message
+// instead of a raw, unhandled fetch error.
 async function loadWebLLM() {
-  const webllm = await import("@mlc-ai/web-llm");
-  return webllm;
+  try {
+    return await import("@mlc-ai/web-llm");
+  } catch {
+    throw new Error(
+      "Offline AI's engine hasn't been cached on this device yet — reconnect to the internet, reopen NoteBuddy once so it can fetch it, then try Offline AI again."
+    );
+  }
 }
 
 export function isOfflineModelReady() {
