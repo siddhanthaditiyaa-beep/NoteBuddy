@@ -116,7 +116,7 @@ function layoutGraph(nodes, edges) {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 0.01);
-        const minDist = a.r + b.r + 18;
+        const minDist = a.r + b.r + 30;
         if (dist < minDist) {
           const overlap = (minDist - dist) / 2;
           const ux = dx / dist;
@@ -219,7 +219,15 @@ export default function KnowledgeGraph({ noteId }) {
                 stroke={isActive ? "#7C5CFC" : "#B8A9FF"}
                 strokeWidth={isActive ? 2.5 : 1.5}
               />
-              {e.relation && (
+              {/* Relation labels only render for the currently-selected concept's
+                  edges. Showing every relation label at once (the old behavior)
+                  meant any two edges running close together — common once a note
+                  has more than ~8 concepts — had their label pills overlap into
+                  unreadable, half-covered text, exactly what made this look
+                  broken. Revealing them one concept at a time keeps every label
+                  fully legible and turns the map into something you explore
+                  rather than squint at. */}
+              {e.relation && isActive && (
                 <>
                   <rect
                     x={midX - (e.relation.length * 3 + 6)}
@@ -228,7 +236,7 @@ export default function KnowledgeGraph({ noteId }) {
                     height={14}
                     rx={7}
                     className="fill-white"
-                    opacity={0.92}
+                    opacity={0.96}
                   />
                   <text
                     x={midX}
@@ -236,7 +244,7 @@ export default function KnowledgeGraph({ noteId }) {
                     fontSize="9.5"
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className="font-bold select-none fill-[#2d2a3d]/70"
+                    className="font-bold select-none fill-[#2d2a3d]"
                   >
                     {e.relation}
                   </text>
@@ -283,7 +291,7 @@ export default function KnowledgeGraph({ noteId }) {
         })}
       </svg>
       <p className="text-xs font-semibold text-ink/40 text-center mt-3">
-        Tap a concept to highlight what it connects to.
+        Tap a concept to see how it connects — and what each connection means.
       </p>
     </div>
   );
