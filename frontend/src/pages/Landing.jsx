@@ -101,7 +101,7 @@ const FEATURES = [
   },
   {
     icon: Users,
-    color: "bg-ink",
+    color: "bg-[#15142c]",
     title: "Study together, privately",
     desc: "A public gallery of shared study kits, async leaderboards on shared notes, opt-in study-buddy matching, and an anonymized class weak-spot heatmap.",
   },
@@ -200,7 +200,7 @@ export default function Landing() {
           more than a wrapper around a single prompt. */}
       <section className="max-w-6xl mx-auto px-6 pb-24">
         <div className="text-center mb-10">
-          <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-ink text-white shadow-card font-bold text-sm mb-4">
+          <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#15142c] text-white shadow-card font-bold text-sm mb-4">
             <Bot size={14} /> Agentic AI
           </span>
           <h2 className="font-display text-3xl md:text-4xl font-extrabold text-ink mb-3">
@@ -219,7 +219,7 @@ export default function Landing() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.08 }}
-              className="bg-ink rounded-xl2 p-6 shadow-card text-white"
+              className="bg-[#15142c] rounded-xl2 p-6 shadow-card text-white"
             >
               <div className="w-11 h-11 rounded-xl2 bg-white/10 flex items-center justify-center mb-4">
                 <a.icon size={20} />
