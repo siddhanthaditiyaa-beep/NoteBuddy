@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
-import { Sparkles, LogOut, ChevronDown, Menu, X, LayoutDashboard, Brain, Layers, Plus, Sun, Moon, CalendarDays, Bell, BellOff, Gift, ShieldAlert, WifiOff } from "lucide-react";
+import { Sparkles, LogOut, ChevronDown, Menu, X, LayoutDashboard, Brain, Layers, Plus, Sun, Moon, CalendarDays, Bell, BellOff, Gift, ShieldAlert, WifiOff, RotateCcw } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useFontSize } from "../context/FontSizeContext";
 import { isPushSupported, getPushSubscriptionStatus, enablePushReminders, disablePushReminders } from "../lib/push";
-import { deleteAccount } from "../lib/api";
+import { deleteAccount, resetProgress } from "../lib/api";
 import { LATEST_VERSION } from "../lib/changelog";
 import ChangelogPanel from "./ChangelogPanel";
 import OfflineAIModal from "./OfflineAIModal";
@@ -137,6 +137,85 @@ function DeleteAccountModal({ open, onClose }) {
   );
 }
 
+// A lighter, reversible-in-spirit alternative to "delete my account" — clears
+// weak topics, quiz history, and flashcard progress (the stuff that goes
+// stale, e.g. an old test note in a different language still showing up in
+// Study Coach) without touching notes, XP, streak, or badges. No typed
+// confirmation needed since nothing irreplaceable is lost.
+function ResetProgressModal({ open, onClose }) {
+  const [resetting, setResetting] = useState(false);
+
+  const handleReset = async () => {
+    setResetting(true);
+    try {
+      await resetProgress();
+      toast.success("Study progress cleared — weak topics and quiz history are reset.");
+      onClose();
+      setTimeout(() => window.location.reload(), 600); // simplest way to make every panel (Coach, weak-topics chips, etc.) reflect the reset immediately
+    } catch (e) {
+      toast.error(e.message || "Couldn't reset your progress right now — please try again.");
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-ink/30 z-[60]"
+          />
+          <div
+            className="fixed inset-0 z-[61] flex items-center justify-center p-4"
+            onClick={onClose}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.97 }}
+              transition={{ duration: 0.18 }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="Reset study progress"
+              className="w-full max-w-sm max-h-[85dvh] overflow-y-auto overscroll-contain bg-white rounded-xl2 shadow-pop p-5 sm:p-6"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              <div className="w-11 h-11 rounded-xl2 bg-primary-50 flex items-center justify-center text-primary-500 mb-4">
+                <RotateCcw size={20} />
+              </div>
+              <h2 className="font-display text-lg font-bold mb-2">Reset study progress?</h2>
+              <p className="text-sm font-semibold text-ink/60 mb-4">
+                This clears your weak topics, quiz history, and flashcard review progress — useful if old or
+                wrong-language data is cluttering Study Coach. Your notes, XP, streak, and badges are untouched.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={onClose}
+                  className="flex-1 py-2.5 rounded-xl2 bg-primary-50 text-ink/60 font-bold text-sm hover:bg-primary-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReset}
+                  disabled={resetting}
+                  className="flex-1 py-2.5 rounded-xl2 bg-primary-500 text-white font-bold text-sm hover:bg-primary-600 disabled:opacity-50 transition-colors"
+                >
+                  {resetting ? "Resetting..." : "Reset progress"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
   return (
@@ -191,6 +270,7 @@ function AccountMenu() {
   const [pushStatus, setPushStatus] = useState("checking"); // checking | unsupported | enabled | disabled
   const [pushBusy, setPushBusy] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const [offlineAIOpen, setOfflineAIOpen] = useState(false);
 
   useEffect(() => {
@@ -287,6 +367,15 @@ function AccountMenu() {
               <WifiOff size={16} /> Offline AI
             </button>
             <button
+              onClick={() => {
+                setOpen(false);
+                setResetOpen(true);
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-ink/70 hover:bg-primary-50 transition-colors"
+            >
+              <RotateCcw size={16} /> Reset study progress
+            </button>
+            <button
               onClick={handleSignOut}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-coral-500 hover:bg-coral-50 transition-colors"
             >
@@ -307,6 +396,7 @@ function AccountMenu() {
         )}
       </AnimatePresence>
       <DeleteAccountModal open={deleteOpen} onClose={() => setDeleteOpen(false)} />
+      <ResetProgressModal open={resetOpen} onClose={() => setResetOpen(false)} />
       <OfflineAIModal open={offlineAIOpen} onClose={() => setOfflineAIOpen(false)} />
     </div>
   );

@@ -123,6 +123,49 @@ def get_all_notes_with_text(user_id: str, limit: int = 20) -> list[dict]:
     return result.data or []
 
 
+def delete_note(user_id: str, note_id: str) -> bool:
+    """Deletes one note and everything tied to it — flashcard progress,
+    logged quiz answers, and any public-quiz leaderboard rows — so a
+    student can clean up a bad/test note (or old-language content that's
+    throwing off their weak-topics list) without wiping their whole
+    account. Ownership is checked via user_id, exactly like every other
+    per-note write here, so this can't be used to delete someone else's
+    note by guessing an id.
+
+    NOTE: topic_progress (the weak-topics table) is intentionally left
+    alone — it's keyed by (user_id, term), not note_id, since the same
+    term can come from more than one note. Use reset_progress() to clear
+    that."""
+    client = get_client()
+    owned = client.table("notes").select("id").eq("id", note_id).eq("user_id", user_id).maybe_single().execute()
+    if not owned or not owned.data:
+        return False
+    for table in ("flashcard_progress", "quiz_answer_log", "quiz_leaderboard"):
+        try:
+            client.table(table).delete().eq("note_id", note_id).execute()
+        except Exception:
+            pass  # best-effort — a missing row/table shouldn't block deleting the note itself
+    client.table("notes").delete().eq("id", note_id).eq("user_id", user_id).execute()
+    return True
+
+
+def reset_progress(user_id: str) -> None:
+    """Clears a student's study HISTORY — weak topics, logged quiz answers,
+    and spaced-repetition flashcard progress — while keeping their actual
+    notes/study kits intact. This is the fix for stale or wrong-language
+    weak-topic data (e.g. an old Malayalam-language test note still
+    surfacing in Study Coach) without needing to delete the notes or the
+    whole account. XP, streak and badges are left untouched on purpose —
+    those reward effort already put in, which resetting mistake history
+    shouldn't erase."""
+    client = get_client()
+    for table in ("topic_progress", "quiz_answer_log", "flashcard_progress"):
+        try:
+            client.table(table).delete().eq("user_id", user_id).execute()
+        except Exception:
+            pass
+
+
 def update_note_subject(user_id: str, note_id: str, subject: str) -> dict | None:
     """Only the owner (verified via their session token) can retag a note —
     used by the Note-Organizer Agent's one-click 'apply' on a suggested

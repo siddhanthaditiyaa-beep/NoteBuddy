@@ -590,6 +590,21 @@ async def update_subject(
     return {"note_id": note_id, "subject": updated.get("subject", req.subject)}
 
 
+@router.delete("/{note_id}")
+async def delete_note(note_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    """Deletes one note plus its flashcard progress, logged quiz answers,
+    and leaderboard rows — for cleaning up a bad/test note (or a stale
+    wrong-language note that's polluting weak topics) without touching
+    anything else."""
+    try:
+        deleted = supabase_client.delete_note(current_user.id, note_id)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    if not deleted:
+        raise HTTPException(404, "Note not found")
+    return {"status": "deleted", "note_id": note_id}
+
+
 @router.post("/{note_id}/regenerate")
 @limiter.limit("10/minute")
 async def regenerate_note(

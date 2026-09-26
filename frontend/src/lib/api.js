@@ -317,6 +317,28 @@ export async function deleteAccount() {
   return handle(res);
 }
 
+// Deletes one note plus its flashcard progress, logged quiz answers, and
+// leaderboard rows — for removing a bad/test note (or an old wrong-language
+// one) without touching anything else in the account.
+export async function deleteNote(noteId) {
+  const res = await fetch(`${API_BASE}/api/notes/${noteId}`, {
+    method: "DELETE",
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
+// Clears weak topics, logged quiz answers, and flashcard spaced-repetition
+// progress — keeps notes, XP, streak, and badges untouched. The fix for
+// stale/wrong-language weak-topic data without deleting the whole account.
+export async function resetProgress() {
+  const res = await fetch(`${API_BASE}/api/user/reset-progress`, {
+    method: "POST",
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
 export async function teachBack({ contextText, concept, explanation }) {
   const res = await fetch(`${API_BASE}/api/practice/teach-back`, {
     method: "POST",

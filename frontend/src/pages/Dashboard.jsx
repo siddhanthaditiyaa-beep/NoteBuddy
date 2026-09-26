@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { FileText, Plus, Flame, Trophy, BookOpen, Search, Layers, Brain, Target, CalendarDays, Clock, Share2, Sparkles, Loader2 } from "lucide-react";
+import { FileText, Plus, Flame, Trophy, BookOpen, Search, Layers, Brain, Target, CalendarDays, Clock, Share2, Sparkles, Loader2, Trash2 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import XPBar from "../components/XPBar";
 import Skeleton from "../components/Skeleton";
@@ -9,7 +9,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTour } from "../context/TourContext";
 import { isDemoUser } from "../lib/constants";
 import { getBadgeVisual } from "../lib/badges";
-import { listNotes, getProgress, getNote, getWeakTopics, searchNotes } from "../lib/api";
+import { listNotes, getProgress, getNote, getWeakTopics, searchNotes, deleteNote } from "../lib/api";
 import { shareAchievementCard } from "../lib/achievementCard";
 import InsightsPanel from "../components/InsightsPanel";
 import StudyCoach from "../components/StudyCoach";
@@ -431,7 +431,12 @@ export default function Dashboard() {
           ) : (
             <div className="grid sm:grid-cols-2 gap-4">
               {filteredNotes.map((n) => (
-                <NoteCard key={n.id} note={n} userId={user.id} />
+                <NoteCard
+                  key={n.id}
+                  note={n}
+                  userId={user.id}
+                  onDeleted={() => setNotes((prev) => prev.filter((note) => note.id !== n.id))}
+                />
               ))}
             </div>
           )}
@@ -470,8 +475,9 @@ export default function Dashboard() {
   );
 }
 
-function NoteCard({ note, userId }) {
+function NoteCard({ note, userId, onDeleted }) {
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const open = async () => {
     setLoading(true);
@@ -487,22 +493,49 @@ function NoteCard({ note, userId }) {
     }
   };
 
+  const handleDelete = async (e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete "${note.title}"? This also removes its flashcard progress and quiz history — can't be undone.`)) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deleteNote(note.id);
+      toast.success("Note deleted.");
+      onDeleted?.();
+    } catch (err) {
+      toast.error(err.message || "Couldn't delete that note right now.");
+      setDeleting(false);
+    }
+  };
+
+  // A plain <button> can't nest another <button> (invalid HTML), so the
+  // delete control is a sibling positioned over the card rather than
+  // nested inside the "open" button. Always visible (not hover-only) so
+  // it's reachable on touch devices, not just with a mouse.
   return (
-    <button
-      onClick={open}
-      disabled={loading}
-      className="text-left bg-white rounded-xl2 shadow-card p-5 hover:shadow-soft hover:-translate-y-0.5 transition-all"
-    >
-      <div className="w-9 h-9 rounded-xl2 bg-primary-50 flex items-center justify-center text-primary-500 mb-3">
-        <FileText size={18} />
-      </div>
-      <p className="font-display font-bold mb-1">{note.title}</p>
-      <p className="text-xs font-semibold text-ink/40 flex items-center gap-1.5">
-        <span className="px-1.5 py-0.5 rounded-full bg-primary-50 text-primary-600">
-          {note.subject || "General"}
-        </span>
-        {new Date(note.created_at).toLocaleDateString()}
-      </p>
-    </button>
+    <div className="relative bg-white rounded-xl2 shadow-card hover:shadow-soft hover:-translate-y-0.5 transition-all">
+      <button
+        onClick={handleDelete}
+        disabled={deleting}
+        title="Delete note"
+        aria-label={`Delete ${note.title}`}
+        className="absolute top-3 right-3 w-7 h-7 rounded-full bg-primary-50 text-ink/30 flex items-center justify-center hover:bg-coral-50 hover:text-coral-500 disabled:opacity-50 transition-colors z-10"
+      >
+        <Trash2 size={13} />
+      </button>
+      <button onClick={open} disabled={loading} className="w-full text-left p-5">
+        <div className="w-9 h-9 rounded-xl2 bg-primary-50 flex items-center justify-center text-primary-500 mb-3">
+          <FileText size={18} />
+        </div>
+        <p className="font-display font-bold mb-1 pr-6">{note.title}</p>
+        <p className="text-xs font-semibold text-ink/40 flex items-center gap-1.5">
+          <span className="px-1.5 py-0.5 rounded-full bg-primary-50 text-primary-600">
+            {note.subject || "General"}
+          </span>
+          {new Date(note.created_at).toLocaleDateString()}
+        </p>
+      </button>
+    </div>
   );
 }

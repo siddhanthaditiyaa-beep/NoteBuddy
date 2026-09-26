@@ -25,6 +25,19 @@ async def reset_demo(current_user: CurrentUser = Depends(get_current_user)):
     except RuntimeError as e:
         raise HTTPException(503, str(e))
 
-    client.table("notes").delete().eq("user_id", current_user.id).execute()
-    client.table("profiles").delete().eq("id", current_user.id).execute()
+    # This used to only wipe notes + profiles, which left flashcard_progress,
+    # topic_progress (weak topics), and quiz_answer_log behind — so an old
+    # test note in a different language could keep surfacing in Study Coach's
+    # weak-topics list forever, even right after a "fresh" demo reset, since
+    # topic_progress is keyed by (user_id, term), not tied to any note that
+    # got deleted. Clearing all of it now actually starts from a clean slate.
+    for table in ("notes", "flashcard_progress", "topic_progress", "quiz_answer_log"):
+        try:
+            client.table(table).delete().eq("user_id", current_user.id).execute()
+        except Exception:
+            pass  # best-effort — a missing/renamed table shouldn't block the rest of the reset
+    try:
+        client.table("profiles").delete().eq("id", current_user.id).execute()  # profiles is keyed by id, not user_id
+    except Exception:
+        pass
     return {"status": "reset"}

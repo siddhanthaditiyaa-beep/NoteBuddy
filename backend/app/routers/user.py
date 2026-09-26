@@ -35,6 +35,21 @@ async def weak_topics(current_user: CurrentUser = Depends(get_current_user)):
     return {"topics": topics}
 
 
+@router.post("/reset-progress")
+async def reset_progress(current_user: CurrentUser = Depends(get_current_user)):
+    """Clears weak topics, logged quiz answers, and flashcard spaced-
+    repetition progress — the study HISTORY that can go stale or wrong
+    (e.g. old test data in a different language throwing off Study
+    Coach's weak-topics list) — without touching notes, XP, streak, or
+    badges. A lighter, reversible-in-spirit alternative to deleting the
+    whole account just to clear out old quiz data."""
+    try:
+        supabase_client.reset_progress(current_user.id)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    return {"status": "reset"}
+
+
 @router.delete("/account")
 async def delete_account(current_user: CurrentUser = Depends(get_current_user)):
     """A real account-deletion flow, not a support-email dead end — wipes
