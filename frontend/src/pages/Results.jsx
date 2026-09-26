@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import jsPDF from "jspdf";
@@ -22,6 +22,8 @@ import {
   GraduationCap,
   FileText,
   Network,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import FlashcardDeck from "../components/FlashcardDeck";
@@ -104,6 +106,29 @@ export default function Results() {
   const [language] = useState(stored?.language || "English");
   const [tab, setTab] = useState("summary");
   const [level, setLevel] = useState("student");
+  // The tab row has 9 tabs and scrolls horizontally on phones with nothing
+  // to hint that — teammate feedback was you'd see "Exam Twin" then a
+  // cut-off tab with no clue there was more to scroll to. tabsScroll tracks
+  // whether there's more content in either direction so we can show a
+  // fade + arrow instead of a silent edge.
+  const tabsRef = useRef(null);
+  const [tabsScroll, setTabsScroll] = useState({ left: false, right: false });
+  const updateTabsScroll = useCallback(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    setTabsScroll({
+      left: el.scrollLeft > 4,
+      right: el.scrollLeft < el.scrollWidth - el.clientWidth - 4,
+    });
+  }, []);
+  useEffect(() => {
+    updateTabsScroll();
+    window.addEventListener("resize", updateTabsScroll);
+    return () => window.removeEventListener("resize", updateTabsScroll);
+  }, [updateTabsScroll]);
+  const scrollTabs = (dir) => {
+    tabsRef.current?.scrollBy({ left: dir * 160, behavior: "smooth" });
+  };
   const [regenLoading, setRegenLoading] = useState(false);
   const [shareUrl, setShareUrl] = useState(null);
   const [sharing, setSharing] = useState(false);
@@ -374,18 +399,51 @@ export default function Results() {
             )}
           </div>
 
-          <div className="flex gap-2 mb-6 overflow-x-auto">
-            {TABS.filter((t) => !t.requiresNoteId || noteId).map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`px-4 py-2.5 rounded-xl2 font-bold text-sm flex items-center gap-2 shrink-0 transition-all ${
-                  tab === t.id ? "bg-primary-500 text-white shadow-soft" : "bg-white text-ink/60 shadow-card"
-                }`}
-              >
-                <t.icon size={16} /> {t.label}
-              </button>
-            ))}
+          <div className="relative mb-6">
+            <div
+              ref={tabsRef}
+              onScroll={updateTabsScroll}
+              className="flex gap-2 overflow-x-auto scroll-smooth"
+            >
+              {TABS.filter((t) => !t.requiresNoteId || noteId).map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`px-4 py-2.5 rounded-xl2 font-bold text-sm flex items-center gap-2 shrink-0 transition-all ${
+                    tab === t.id ? "bg-primary-500 text-white shadow-soft" : "bg-white text-ink/60 shadow-card"
+                  }`}
+                >
+                  <t.icon size={16} /> {t.label}
+                </button>
+              ))}
+            </div>
+            {/* Fade + arrow on whichever edge still has more tabs to scroll to —
+                previously the row just cut off mid-tab with nothing to signal
+                there was more, so it looked like "Concept Map" was the last tab. */}
+            {tabsScroll.left && (
+              <>
+                <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-10 bg-gradient-to-r from-cloud dark:from-[#0f0f17] to-transparent" />
+                <button
+                  onClick={() => scrollTabs(-1)}
+                  aria-label="Scroll tabs left"
+                  className="absolute left-0 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white shadow-pop flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+              </>
+            )}
+            {tabsScroll.right && (
+              <>
+                <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-cloud dark:from-[#0f0f17] to-transparent" />
+                <button
+                  onClick={() => scrollTabs(1)}
+                  aria-label="Scroll tabs right"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white shadow-pop flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors"
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </>
+            )}
           </div>
 
           <AnimatePresence mode="wait">
