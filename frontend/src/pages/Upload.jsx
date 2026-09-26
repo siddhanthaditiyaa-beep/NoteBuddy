@@ -403,7 +403,7 @@ export default function Upload() {
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 className={`w-full rounded-xl2 bg-white shadow-card border-2 border-dashed transition-colors p-5 ${
-                  dragOver ? "border-primary-400 bg-primary-50/40" : "border-primary-200"
+                  dragOver ? "border-primary-400 bg-primary-50" : "border-primary-200"
                 }`}
               >
                 {pages.length === 0 ? (

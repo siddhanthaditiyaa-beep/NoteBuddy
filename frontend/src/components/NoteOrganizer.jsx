@@ -78,7 +78,7 @@ export default function NoteOrganizer() {
               </p>
               <div className="space-y-2">
                 {result.suggested_subjects.map((s, i) => (
-                  <div key={i} className="p-3 rounded-xl2 bg-primary-50/50 flex items-center justify-between gap-3">
+                  <div key={i} className="p-3 rounded-xl2 bg-primary-50 flex items-center justify-between gap-3">
                     <div>
                       <p className="font-bold text-sm text-primary-700">{s.note_title}</p>
                       <p className="text-xs font-semibold text-ink/50">
@@ -111,7 +111,7 @@ export default function NoteOrganizer() {
               </p>
               <div className="space-y-2">
                 {result.suggested_combines.map((c, i) => (
-                  <div key={i} className="p-3 rounded-xl2 bg-sun-50/60">
+                  <div key={i} className="p-3 rounded-xl2 bg-sun-50">
                     <p className="font-bold text-sm text-ink/70">{c.note_titles?.join(" + ")}</p>
                     <p className="text-xs font-semibold text-ink/50">{c.why}</p>
                   </div>
@@ -127,7 +127,7 @@ export default function NoteOrganizer() {
               </p>
               <div className="space-y-2">
                 {result.contradictions.map((c, i) => (
-                  <div key={i} className="p-3 rounded-xl2 bg-coral-50/60">
+                  <div key={i} className="p-3 rounded-xl2 bg-coral-50">
                     <p className="font-bold text-sm text-ink/70">{c.note_titles?.join(" vs. ")}</p>
                     <p className="text-xs font-semibold text-ink/50">{c.issue}</p>
                   </div>

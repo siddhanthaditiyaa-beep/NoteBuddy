@@ -97,7 +97,7 @@ function MistakeRetrospective() {
         <div className="space-y-3">
           <p className="text-sm font-semibold text-ink/60">{result.summary}</p>
           {result.patterns.map((p, i) => (
-            <div key={i} className="p-3 rounded-xl2 bg-coral-50/50">
+            <div key={i} className="p-3 rounded-xl2 bg-coral-50">
               <p className="font-bold text-sm text-coral-700 mb-1">{p.pattern}</p>
               <p className="text-sm font-semibold text-ink/70 mb-1">{p.explanation}</p>
               <p className="text-xs font-bold text-mint-700">Try this: {p.fix}</p>

@@ -9,6 +9,18 @@ const TourContext = createContext(null);
 const STEPS = [
   {
     route: "/dashboard",
+    selector: "[data-tour='account-menu-btn']",
+    title: "Works even offline",
+    body: "Open your account menu any time and turn on Offline AI — it downloads a small AI model straight into your browser so chat and flashcards keep working with no internet connection at all.",
+  },
+  {
+    route: "/dashboard",
+    selector: "[data-tour='planner-nav-link']",
+    title: "Meet your AI agents",
+    body: "NoteBuddy has four real AI agents — a Study Planner, Study Coach, Cross-Note Tutor, and Note Organizer — that look at your actual weak topics, due flashcards, and mistakes, and decide for themselves what to do next. Start with the Study Planner here any time you have a goal in mind.",
+  },
+  {
+    route: "/dashboard",
     selector: "[data-tour='new-note-btn']",
     title: "Start here",
     body: 'Click "New Note" any time you want to turn material into a study kit. Let\'s see how it works.',
@@ -53,7 +65,7 @@ const STEPS = [
     route: "/upload",
     selector: "[data-tour='generate-btn']",
     title: "Generate your study kit",
-    body: "Click this and NoteBuddy's AI builds your summary, flashcards, and quiz. Try it now — the tour ends here so you can explore freely!",
+    body: "Click this and Google's Gemini generative AI builds your summary, flashcards, and quiz from scratch. Try it now — the tour ends here so you can explore freely!",
     isLast: true,
   },
 ];

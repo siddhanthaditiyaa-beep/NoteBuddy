@@ -37,7 +37,7 @@ export default function SyllabusGapTracker() {
         onChange={(e) => setText(e.target.value)}
         rows={4}
         placeholder="e.g. Chapter 1: Cell structure&#10;Chapter 2: Mitosis and meiosis&#10;Chapter 3: DNA replication..."
-        className="w-full p-3 rounded-xl2 bg-primary-50/40 shadow-card outline-none font-semibold text-sm mb-3 focus:ring-2 focus:ring-primary-300"
+        className="w-full p-3 rounded-xl2 bg-primary-50 shadow-card outline-none font-semibold text-sm mb-3 focus:ring-2 focus:ring-primary-300"
       />
       <button
         onClick={check}

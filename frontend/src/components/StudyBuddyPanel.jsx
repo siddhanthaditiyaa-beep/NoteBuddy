@@ -81,14 +81,14 @@ export default function StudyBuddyPanel() {
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="Display name (e.g. a nickname)"
               maxLength={40}
-              className="w-full px-3 py-2 rounded-xl2 bg-primary-50/40 shadow-card outline-none font-semibold text-sm focus:ring-2 focus:ring-primary-300"
+              className="w-full px-3 py-2 rounded-xl2 bg-primary-50 shadow-card outline-none font-semibold text-sm focus:ring-2 focus:ring-primary-300"
             />
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Optional note (e.g. 'free most evenings')"
               maxLength={200}
-              className="w-full px-3 py-2 rounded-xl2 bg-primary-50/40 shadow-card outline-none font-semibold text-sm focus:ring-2 focus:ring-primary-300"
+              className="w-full px-3 py-2 rounded-xl2 bg-primary-50 shadow-card outline-none font-semibold text-sm focus:ring-2 focus:ring-primary-300"
             />
           </div>
           <button
@@ -114,7 +114,7 @@ export default function StudyBuddyPanel() {
           ) : (
             <div className="space-y-2 mb-3">
               {matches.map((m, i) => (
-                <div key={i} className="p-3 rounded-xl2 bg-primary-50/50">
+                <div key={i} className="p-3 rounded-xl2 bg-primary-50">
                   <p className="font-bold text-sm text-primary-700">{m.display_name}</p>
                   <p className="text-xs font-semibold text-ink/50 mb-1">Shared: {m.shared_subjects.join(", ")}</p>
                   {m.note && <p className="text-xs font-semibold text-ink/60">"{m.note}"</p>}

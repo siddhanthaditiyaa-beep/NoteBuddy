@@ -187,7 +187,7 @@ export default function Combine() {
                           </h4>
                           <div className="space-y-2">
                             {checkResult.contradictions.map((c, i) => (
-                              <div key={i} className="p-3 rounded-xl2 bg-coral-50/60">
+                              <div key={i} className="p-3 rounded-xl2 bg-coral-50">
                                 <p className="font-bold text-sm text-coral-700">{c.topic}</p>
                                 <p className="text-xs font-semibold text-ink/50 mb-1">
                                   {c.note_a} vs {c.note_b}
@@ -205,7 +205,7 @@ export default function Combine() {
                           </h4>
                           <div className="space-y-2">
                             {checkResult.gaps.map((g, i) => (
-                              <div key={i} className="p-3 rounded-xl2 bg-sun-50/60">
+                              <div key={i} className="p-3 rounded-xl2 bg-sun-50">
                                 <p className="font-bold text-sm text-sun-700">{g.term}</p>
                                 <p className="text-xs font-semibold text-ink/50 mb-1">{g.mentioned_in}</p>
                                 <p className="text-sm font-semibold text-ink/70">{g.why_it_matters}</p>

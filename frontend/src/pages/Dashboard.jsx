@@ -237,7 +237,7 @@ export default function Dashboard() {
                         key={`${r.note_id}-${i}`}
                         onClick={() => openFromSearch(r.note_id)}
                         disabled={semOpeningId === r.note_id}
-                        className="w-full text-left p-3 rounded-xl2 bg-primary-50/50 hover:bg-primary-50 transition-colors disabled:opacity-60"
+                        className="w-full text-left p-3 rounded-xl2 bg-primary-50 hover:bg-primary-50 transition-colors disabled:opacity-60"
                       >
                         <p className="text-xs font-bold text-primary-700 mb-1">{r.note_title}</p>
                         <p className="text-sm font-semibold text-ink/70 line-clamp-2">{r.chunk_text}</p>

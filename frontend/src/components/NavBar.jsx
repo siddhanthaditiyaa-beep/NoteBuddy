@@ -101,7 +101,7 @@ function DeleteAccountModal({ open, onClose }) {
               onChange={(e) => setConfirmText(e.target.value)}
               placeholder="Type DELETE"
               autoFocus
-              className="w-full px-4 py-2.5 rounded-xl2 bg-coral-50/50 shadow-card outline-none font-bold text-sm mb-4 focus:ring-2 focus:ring-coral-300"
+              className="w-full px-4 py-2.5 rounded-xl2 bg-coral-50 shadow-card outline-none font-bold text-sm mb-4 focus:ring-2 focus:ring-coral-300"
             />
             <div className="flex gap-2">
               <button
@@ -225,6 +225,7 @@ function AccountMenu() {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen((o) => !o)}
+        data-tour="account-menu-btn"
         className="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-xl2 bg-white shadow-card hover:shadow-soft transition-all"
       >
         <div className="w-7 h-7 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
@@ -403,6 +404,7 @@ export default function NavBar() {
               </Link>
               <Link
                 to="/planner"
+                data-tour="planner-nav-link"
                 className="hidden sm:inline text-sm font-bold text-ink/70 hover:text-primary-600 transition-colors"
               >
                 Planner

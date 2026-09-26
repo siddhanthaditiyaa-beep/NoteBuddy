@@ -69,7 +69,7 @@ export default function SharedNote() {
 
   return (
     <div className="min-h-screen blob-bg relative overflow-hidden">
-      <div className="border-b border-primary-100 bg-white/70 backdrop-blur-sm">
+      <div className="border-b border-primary-100 bg-white backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="font-display font-extrabold text-lg text-primary-600">
             NoteBuddy

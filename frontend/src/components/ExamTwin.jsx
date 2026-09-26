@@ -144,7 +144,7 @@ export default function ExamTwin({ noteId, rawText, board }) {
   if (phase === "taking") {
     return (
       <div className="max-w-2xl mx-auto">
-        <div className="sticky top-16 z-10 bg-white/95 backdrop-blur-sm rounded-xl2 shadow-card px-4 py-3 mb-5 flex items-center justify-between">
+        <div className="sticky top-16 z-10 bg-white backdrop-blur-sm rounded-xl2 shadow-card px-4 py-3 mb-5 flex items-center justify-between">
           <div>
             <p className="font-display font-bold">{exam.title}</p>
             <p className="text-xs font-bold text-ink/40">{exam.total_marks} marks total</p>
@@ -187,7 +187,7 @@ export default function ExamTwin({ noteId, rawText, board }) {
                         onChange={(e) => setAnswer(key, e.target.value)}
                         rows={q.type === "long" ? 5 : 3}
                         placeholder="Your answer..."
-                        className="w-full p-3 rounded-xl2 bg-primary-50/40 shadow-card outline-none font-semibold text-sm focus:ring-2 focus:ring-primary-300"
+                        className="w-full p-3 rounded-xl2 bg-primary-50 shadow-card outline-none font-semibold text-sm focus:ring-2 focus:ring-primary-300"
                       />
                     )}
                   </div>

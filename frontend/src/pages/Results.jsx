@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import jsPDF from "jspdf";
@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import FlashcardDeck from "../components/FlashcardDeck";
+import AudioPlayerBar from "../components/AudioPlayerBar";
 import Quiz from "../components/Quiz";
 import ChatPanel from "../components/ChatPanel";
 import PracticeMode from "../components/PracticeMode";
@@ -69,7 +70,11 @@ const TABS = [
 // Walks the read-aloud through the whole kit — summary, then key terms,
 // then flashcard Q&As — instead of just the summary paragraph, so it works
 // as an actual "study podcast" a learner can listen to hands-free.
-function buildPodcastScript(studyKit) {
+// `altAnswers` is a { [flashcardIndex]: text } map of whatever explanation
+// is CURRENTLY on screen for a card (the original answer, or the latest
+// "explain differently" / "one more way" rewrite) — without it, this would
+// always read the original answer even after the student swapped it out.
+function buildPodcastScript(studyKit, altAnswers = {}) {
   const parts = [];
   if (studyKit.summary) parts.push(studyKit.summary);
   if (studyKit.key_terms?.length) {
@@ -78,7 +83,10 @@ function buildPodcastScript(studyKit) {
   }
   if (studyKit.flashcards?.length) {
     parts.push("Now, flashcards.");
-    studyKit.flashcards.forEach((fc, i) => parts.push(`Question ${i + 1}. ${fc.front}... Answer: ${fc.back}.`));
+    studyKit.flashcards.forEach((fc, i) => {
+      const back = altAnswers[i] ?? fc.back;
+      parts.push(`Question ${i + 1}. ${fc.front}... Answer: ${back}.`);
+    });
   }
   return parts.join(" ");
 }
@@ -97,65 +105,25 @@ export default function Results() {
   const [tab, setTab] = useState("summary");
   const [level, setLevel] = useState("beginner");
   const [regenLoading, setRegenLoading] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
   const [shareUrl, setShareUrl] = useState(null);
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Stop any in-progress read-aloud if the user navigates away mid-speech.
-  useEffect(() => {
-    return () => {
-      window.speechSynthesis?.cancel();
-    };
-  }, []);
+  // "summary" | "podcast" | null — which one (if any) the AudioPlayerBar is
+  // currently playing. altAnswers tracks whatever explanation is CURRENTLY
+  // shown for each flashcard (see FlashcardDeck's onExplanationChange), so
+  // the podcast script reads what the student is actually looking at.
+  const [playerMode, setPlayerMode] = useState(null);
+  const [altAnswers, setAltAnswers] = useState({});
 
-  const [speakMode, setSpeakMode] = useState(null); // "summary" | "podcast" | null
+  const speakLangTag = SPEECH_LANG_MAP[language] || "en-US";
 
   const toggleSpeak = (mode = "summary") => {
     if (!("speechSynthesis" in window)) {
       toast.error("Your browser doesn't support read-aloud.");
       return;
     }
-    if (speaking) {
-      window.speechSynthesis.cancel();
-      setSpeaking(false);
-      setSpeakMode(null);
-      // If a different mode was requested while one was already playing,
-      // stopping is enough for this click — the learner can press again to
-      // start the new mode, rather than us auto-chaining into it.
-      if (speakMode === mode) return;
-    }
-    const text = mode === "podcast" ? buildPodcastScript(studyKit) : studyKit.summary || "";
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
-    const langTag = SPEECH_LANG_MAP[language] || "en-US";
-    utterance.lang = langTag;
-    // Some browsers (Chrome especially) need a voice explicitly matched to
-    // the language, not just the "lang" tag, or they silently fall back to
-    // the default English voice. Best-effort — if no matching voice has
-    // loaded yet, utterance.lang alone still steers most browsers/TTS
-    // engines to the right pronunciation.
-    const voices = window.speechSynthesis.getVoices();
-    const matchedVoice =
-      voices.find((v) => v.lang === langTag) || voices.find((v) => v.lang?.startsWith(langTag.split("-")[0]));
-    if (matchedVoice) utterance.voice = matchedVoice;
-    else if (langTag !== "en-US") {
-      toast("Your device may not have a " + language + " voice installed — read-aloud might sound like English.", {
-        icon: "🔊",
-      });
-    }
-    utterance.onend = () => {
-      setSpeaking(false);
-      setSpeakMode(null);
-    };
-    utterance.onerror = () => {
-      setSpeaking(false);
-      setSpeakMode(null);
-    };
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-    setSpeaking(true);
-    setSpeakMode(mode);
+    setPlayerMode((current) => (current === mode ? null : mode));
   };
 
   const downloadPdf = () => {
@@ -341,19 +309,19 @@ export default function Results() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => toggleSpeak("summary")}
-                title={speaking && speakMode === "summary" ? "Stop reading" : "Read summary aloud"}
-                aria-label={speaking && speakMode === "summary" ? "Stop reading" : "Read summary aloud"}
+                title={playerMode === "summary" ? "Stop reading" : "Read summary aloud"}
+                aria-label={playerMode === "summary" ? "Stop reading" : "Read summary aloud"}
                 className="w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors"
               >
-                {speaking && speakMode === "summary" ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                {playerMode === "summary" ? <VolumeX size={16} /> : <Volume2 size={16} />}
               </button>
               <button
                 onClick={() => toggleSpeak("podcast")}
-                title={speaking && speakMode === "podcast" ? "Stop study podcast" : "Listen to the full study podcast (summary + terms + flashcards)"}
-                aria-label={speaking && speakMode === "podcast" ? "Stop study podcast" : "Listen to full study podcast"}
+                title={playerMode === "podcast" ? "Stop study podcast" : "Listen to the full study podcast (summary + terms + flashcards)"}
+                aria-label={playerMode === "podcast" ? "Stop study podcast" : "Listen to full study podcast"}
                 className="w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors"
               >
-                <Headphones size={16} className={speaking && speakMode === "podcast" ? "text-primary-600" : ""} />
+                <Headphones size={16} className={playerMode === "podcast" ? "text-primary-600" : ""} />
               </button>
               <button
                 onClick={downloadPdf}
@@ -449,7 +417,11 @@ export default function Results() {
                 )}
                 {tab === "flashcards" && (
                   <div className="bg-white rounded-xl2 shadow-card p-8">
-                    <FlashcardDeck cards={studyKit.flashcards} rawText={rawText} />
+                    <FlashcardDeck
+                      cards={studyKit.flashcards}
+                      rawText={rawText}
+                      onExplanationChange={(i, text) => setAltAnswers((prev) => ({ ...prev, [i]: text }))}
+                    />
                   </div>
                 )}
                 {tab === "practice" && (
@@ -493,7 +465,7 @@ export default function Results() {
                           {studyKit.mind_map.branches?.map((branch, i) => (
                             <div
                               key={i}
-                              className="border-2 border-primary-100 rounded-xl2 p-4 bg-primary-50/40"
+                              className="border-2 border-primary-100 rounded-xl2 p-4 bg-primary-50"
                             >
                               <p className="font-display font-bold text-primary-700 mb-3">
                                 {branch.label}
@@ -525,6 +497,15 @@ export default function Results() {
           </AnimatePresence>
         </motion.div>
       </div>
+      {playerMode && (
+        <AudioPlayerBar
+          key={playerMode}
+          text={playerMode === "podcast" ? buildPodcastScript(studyKit, altAnswers) : studyKit.summary || ""}
+          lang={speakLangTag}
+          label={playerMode === "podcast" ? "Study podcast" : "Reading summary"}
+          onClose={() => setPlayerMode(null)}
+        />
+      )}
     </div>
   );
 }

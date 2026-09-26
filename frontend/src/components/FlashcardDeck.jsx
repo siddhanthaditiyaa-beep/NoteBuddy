@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, RotateCw, Lightbulb, Loader2 } from "lucide-
 import { explainDifferently } from "../lib/api";
 import { isOfflineModelReady, askOfflineAI } from "../lib/offlineAI";
 
-export default function FlashcardDeck({ cards = [], rawText = "" }) {
+export default function FlashcardDeck({ cards = [], rawText = "", onExplanationChange }) {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [altExplanation, setAltExplanation] = useState(null); // { cardIndex, text } | null
@@ -33,7 +33,12 @@ export default function FlashcardDeck({ cards = [], rawText = "" }) {
       try {
         const systemPrompt = `You are NoteBuddy, a friendly tutor. Re-explain the given concept using a DIFFERENT analogy than a textbook definition — vivid, concrete, 2-4 sentences. Background material:\n\n${(rawText || "").slice(0, 2000)}`;
         const text = await askOfflineAI(systemPrompt, concept);
-        setAltExplanation({ cardIndex: index, text: text || "Couldn't come up with another explanation for that one." });
+        const finalText = text || "Couldn't come up with another explanation for that one.";
+        setAltExplanation({ cardIndex: index, text: finalText });
+        // Let the parent (Results page) know so read-aloud / the study
+        // podcast reads whatever explanation is currently on screen for
+        // this card, not the original answer it was generated with.
+        onExplanationChange?.(index, finalText);
       } catch (err) {
         toast.error(err.message || "The offline model hit a snag on that one.");
       } finally {
@@ -45,6 +50,7 @@ export default function FlashcardDeck({ cards = [], rawText = "" }) {
     try {
       const res = await explainDifferently({ contextText: rawText, concept });
       setAltExplanation({ cardIndex: index, text: res.explanation });
+      onExplanationChange?.(index, res.explanation);
     } catch (err) {
       toast.error(err.message || "Couldn't get another explanation right now.");
     } finally {

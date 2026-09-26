@@ -46,7 +46,7 @@ export default function Gallery() {
 
   return (
     <div className="min-h-screen blob-bg relative overflow-hidden">
-      <div className="border-b border-primary-100 bg-white/70 backdrop-blur-sm">
+      <div className="border-b border-primary-100 bg-white backdrop-blur-sm">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="font-display font-extrabold text-lg text-primary-600 flex items-center gap-2">
             <Sparkles size={18} /> NoteBuddy
