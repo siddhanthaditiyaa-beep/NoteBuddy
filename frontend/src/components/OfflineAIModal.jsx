@@ -45,28 +45,37 @@ export default function OfflineAIModal({ open, onClose }) {
             onClick={onClose}
             className="fixed inset-0 bg-ink/30 z-[60]"
           />
-          <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.97 }}
-            transition={{ duration: 0.18 }}
-            role="dialog"
-            aria-label="Offline AI"
-            className="fixed z-[61] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-sm bg-white rounded-xl2 shadow-pop p-6"
+          {/* See ChangelogPanel for why centering has to happen here, via flexbox,
+              rather than with left-1/2/top-1/2 + translate on the motion.div itself:
+              framer-motion's own inline transform (from animate={{ y, scale }})
+              overwrites any Tailwind translate classes on the same element. */}
+          <div
+            className="fixed inset-0 z-[61] flex items-center justify-center p-4"
+            onClick={onClose}
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-11 h-11 rounded-xl2 bg-primary-50 flex items-center justify-center text-primary-500">
-                <WifiOff size={22} />
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.97 }}
+              transition={{ duration: 0.18 }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="Offline AI"
+              className="w-full max-w-sm bg-white rounded-xl2 shadow-pop p-5 sm:p-6 max-h-[85vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-11 h-11 rounded-xl2 bg-primary-50 flex items-center justify-center text-primary-500 shrink-0">
+                  <WifiOff size={22} />
+                </div>
+                <button
+                  onClick={onClose}
+                  aria-label="Close"
+                  className="w-8 h-8 rounded-xl2 bg-primary-50 flex items-center justify-center text-ink/50 hover:text-primary-600 transition-colors shrink-0"
+                >
+                  <X size={16} />
+                </button>
               </div>
-              <button
-                onClick={onClose}
-                aria-label="Close"
-                className="w-8 h-8 rounded-xl2 bg-primary-50 flex items-center justify-center text-ink/50 hover:text-primary-600 transition-colors"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <h2 className="font-display text-lg font-bold mb-2">Offline AI</h2>
+              <h2 className="font-display text-lg font-bold mb-2">Offline AI</h2>
 
             {!supported ? (
               <p className="text-sm font-semibold text-ink/60">
@@ -117,7 +126,8 @@ export default function OfflineAIModal({ open, onClose }) {
                 )}
               </>
             )}
-          </motion.div>
+            </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>

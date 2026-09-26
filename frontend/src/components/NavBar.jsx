@@ -34,9 +34,9 @@ function WhatsNewButton() {
         onClick={openPanel}
         title="What's new"
         aria-label="What's new in NoteBuddy"
-        className="relative w-9 h-9 rounded-xl2 bg-white dark:bg-[#1c1b2e] shadow-card flex items-center justify-center text-ink/70 shrink-0 hover:text-primary-600 transition-colors"
+        className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-xl2 bg-white dark:bg-[#1c1b2e] shadow-card flex items-center justify-center text-ink/70 shrink-0 hover:text-primary-600 transition-colors"
       >
-        <Gift size={16} />
+        <Gift size={15} />
         {hasUnseen && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-coral-500" />}
       </button>
       <ChangelogPanel open={open} onClose={() => setOpen(false)} />
@@ -79,46 +79,57 @@ function DeleteAccountModal({ open, onClose }) {
             onClick={onClose}
             className="fixed inset-0 bg-ink/30 z-[60]"
           />
-          <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.97 }}
-            transition={{ duration: 0.18 }}
-            role="dialog"
-            aria-label="Delete your account"
-            className="fixed z-[61] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-sm bg-white rounded-xl2 shadow-pop p-6"
+          {/* Centering wrapper, not left-1/2/top-1/2 + translate on the card itself:
+              framer-motion's own inline transform (from animate={{ y, scale }})
+              overwrites Tailwind's translate classes on the same element, which was
+              pinning this dialog to the center *point* of the screen with no
+              centering offset — it rendered stretching off the right edge on phones. */}
+          <div
+            className="fixed inset-0 z-[61] flex items-center justify-center p-4"
+            onClick={onClose}
           >
-            <div className="w-11 h-11 rounded-xl2 bg-coral-50 flex items-center justify-center text-coral-500 mb-4">
-              <ShieldAlert size={22} />
-            </div>
-            <h2 className="font-display text-lg font-bold mb-2">Delete your account?</h2>
-            <p className="text-sm font-semibold text-ink/60 mb-4">
-              This permanently deletes every note, flashcard, and badge you've made, and can't be undone.
-              Type <span className="font-black text-coral-600">DELETE</span> to confirm.
-            </p>
-            <input
-              value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
-              placeholder="Type DELETE"
-              autoFocus
-              className="w-full px-4 py-2.5 rounded-xl2 bg-coral-50 shadow-card outline-none font-bold text-sm mb-4 focus:ring-2 focus:ring-coral-300"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={onClose}
-                className="flex-1 py-2.5 rounded-xl2 bg-primary-50 text-ink/60 font-bold text-sm hover:bg-primary-100 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={confirmDisabled}
-                className="flex-1 py-2.5 rounded-xl2 bg-coral-500 text-white font-bold text-sm hover:bg-coral-600 disabled:opacity-50 transition-colors"
-              >
-                {deleting ? "Deleting..." : "Delete forever"}
-              </button>
-            </div>
-          </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.97 }}
+              transition={{ duration: 0.18 }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="Delete your account"
+              className="w-full max-w-sm bg-white rounded-xl2 shadow-pop p-5 sm:p-6"
+            >
+              <div className="w-11 h-11 rounded-xl2 bg-coral-50 flex items-center justify-center text-coral-500 mb-4">
+                <ShieldAlert size={22} />
+              </div>
+              <h2 className="font-display text-lg font-bold mb-2">Delete your account?</h2>
+              <p className="text-sm font-semibold text-ink/60 mb-4">
+                This permanently deletes every note, flashcard, and badge you've made, and can't be undone.
+                Type <span className="font-black text-coral-600">DELETE</span> to confirm.
+              </p>
+              <input
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="Type DELETE"
+                autoFocus
+                className="w-full px-4 py-2.5 rounded-xl2 bg-coral-50 shadow-card outline-none font-bold text-sm mb-4 focus:ring-2 focus:ring-coral-300"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={onClose}
+                  className="flex-1 py-2.5 rounded-xl2 bg-primary-50 text-ink/60 font-bold text-sm hover:bg-primary-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={confirmDisabled}
+                  className="flex-1 py-2.5 rounded-xl2 bg-coral-500 text-white font-bold text-sm hover:bg-coral-600 disabled:opacity-50 transition-colors"
+                >
+                  {deleting ? "Deleting..." : "Delete forever"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>
@@ -132,9 +143,9 @@ function ThemeToggle() {
       onClick={toggleTheme}
       title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
       aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-      className="w-9 h-9 rounded-xl2 bg-white dark:bg-[#1c1b2e] shadow-card flex items-center justify-center text-ink/70 shrink-0 hover:text-primary-600 transition-colors"
+      className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl2 bg-white dark:bg-[#1c1b2e] shadow-card flex items-center justify-center text-ink/70 shrink-0 hover:text-primary-600 transition-colors"
     >
-      {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+      {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
     </button>
   );
 }
@@ -226,7 +237,7 @@ function AccountMenu() {
       <button
         onClick={() => setOpen((o) => !o)}
         data-tour="account-menu-btn"
-        className="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-xl2 bg-white shadow-card hover:shadow-soft transition-all"
+        className="flex items-center gap-1.5 sm:gap-2 pl-1.5 pr-2 sm:pr-2.5 py-1.5 rounded-xl2 bg-white shadow-card hover:shadow-soft transition-all"
       >
         <div className="w-7 h-7 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
           {initial}
@@ -234,7 +245,7 @@ function AccountMenu() {
         <span className="hidden sm:inline text-sm font-bold text-ink/70 max-w-[120px] truncate">
           {displayName}
         </span>
-        <ChevronDown size={14} className={`text-ink/40 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown size={13} className={`text-ink/40 transition-transform shrink-0 ${open ? "rotate-180" : ""}`} />
       </button>
 
       <AnimatePresence>
@@ -367,21 +378,22 @@ export default function NavBar() {
 
   return (
     <nav className="sticky top-0 z-40 backdrop-blur-md bg-white/70 dark:bg-[#0f0f17]/80 border-b border-primary-100 dark:border-white/10 relative">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
         <Link
           to={user ? "/dashboard" : "/"}
-          className="flex items-center gap-2 font-display font-extrabold text-lg sm:text-xl text-ink shrink-0"
+          className="flex items-center gap-1.5 sm:gap-2 font-display font-extrabold text-base sm:text-xl text-ink shrink-0 min-w-0"
         >
           <motion.div
             whileHover={{ rotate: 15, scale: 1.1 }}
-            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl2 bg-primary-500 flex items-center justify-center text-white shadow-soft shrink-0"
+            className="w-7 h-7 sm:w-9 sm:h-9 rounded-xl2 bg-primary-500 flex items-center justify-center text-white shadow-soft shrink-0"
           >
-            <Sparkles size={16} />
+            <Sparkles size={14} className="sm:hidden" />
+            <Sparkles size={16} className="hidden sm:block" />
           </motion.div>
-          NoteBuddy
+          <span className="truncate">NoteBuddy</span>
         </Link>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {user ? (
             <>
               <Link
@@ -422,11 +434,11 @@ export default function NavBar() {
               <AccountMenu />
               <button
                 onClick={() => setMobileOpen((o) => !o)}
-                className="sm:hidden w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/70 shrink-0"
+                className="sm:hidden w-8 h-8 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/70 shrink-0"
                 title="Menu"
                 aria-label={mobileOpen ? "Close menu" : "Open menu"}
               >
-                {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+                {mobileOpen ? <X size={17} /> : <Menu size={17} />}
               </button>
               <MobileMenu open={mobileOpen} onClose={() => setMobileOpen(false)} />
             </>

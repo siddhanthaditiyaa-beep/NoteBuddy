@@ -327,7 +327,7 @@ export default function Upload() {
       />
 
       <NavBar />
-      <div className="max-w-2xl mx-auto px-6 py-12 relative">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12 relative">
         <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}>
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white shadow-card font-bold text-xs text-primary-600 mb-3">
             <Sparkles size={12} /> AI study kit generator
@@ -337,38 +337,43 @@ export default function Upload() {
             Paste your notes, or upload a PDF / photo — NoteBuddy will build your study kit.
           </p>
 
-          <div className="flex gap-2 mb-5 flex-wrap" data-tour="mode-toggle">
+          {/* 2-column grid on phones — 4 flex-1 buttons in one flex-wrap row don't
+              have room for icon + label at once on a ~360-390px screen, so they
+              wrapped unevenly and cut off mid-word. A grid gives each button its
+              own full-width cell up to the sm breakpoint, where it reverts to a
+              single row. */}
+          <div className="grid grid-cols-2 sm:flex gap-2 mb-5" data-tour="mode-toggle">
             <button
               onClick={() => switchMode("text")}
-              className={`flex-1 py-3 rounded-xl2 font-bold flex items-center justify-center gap-2 border-2 transition-all ${
+              className={`sm:flex-1 py-3 px-2 rounded-xl2 font-bold text-sm sm:text-base flex items-center justify-center gap-1.5 sm:gap-2 border-2 transition-all ${
                 mode === "text" ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-primary-100 text-ink/60"
               }`}
             >
-              <FileText size={18} /> Paste text
+              <FileText size={17} className="shrink-0" /> <span className="truncate">Paste text</span>
             </button>
             <button
               onClick={() => switchMode("file")}
-              className={`flex-1 py-3 rounded-xl2 font-bold flex items-center justify-center gap-2 border-2 transition-all ${
+              className={`sm:flex-1 py-3 px-2 rounded-xl2 font-bold text-sm sm:text-base flex items-center justify-center gap-1.5 sm:gap-2 border-2 transition-all ${
                 mode === "file" ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-primary-100 text-ink/60"
               }`}
             >
-              <ImageIcon size={18} /> PDF / photo
+              <ImageIcon size={17} className="shrink-0" /> <span className="truncate">PDF / photo</span>
             </button>
             <button
               onClick={() => switchMode("audio")}
-              className={`flex-1 py-3 rounded-xl2 font-bold flex items-center justify-center gap-2 border-2 transition-all ${
+              className={`sm:flex-1 py-3 px-2 rounded-xl2 font-bold text-sm sm:text-base flex items-center justify-center gap-1.5 sm:gap-2 border-2 transition-all ${
                 mode === "audio" ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-primary-100 text-ink/60"
               }`}
             >
-              <Mic size={18} /> Record / audio
+              <Mic size={17} className="shrink-0" /> <span className="truncate">Record / audio</span>
             </button>
             <button
               onClick={() => switchMode("youtube")}
-              className={`flex-1 py-3 rounded-xl2 font-bold flex items-center justify-center gap-2 border-2 transition-all ${
+              className={`sm:flex-1 py-3 px-2 rounded-xl2 font-bold text-sm sm:text-base flex items-center justify-center gap-1.5 sm:gap-2 border-2 transition-all ${
                 mode === "youtube" ? "bg-primary-500 border-primary-500 text-white" : "bg-white border-primary-100 text-ink/60"
               }`}
             >
-              <Video size={18} /> YouTube
+              <Video size={17} className="shrink-0" /> <span className="truncate">YouTube</span>
             </button>
           </div>
 
