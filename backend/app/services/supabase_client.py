@@ -107,6 +107,38 @@ def get_notes_by_ids(user_id: str, note_ids: list[str]) -> list[dict]:
     return result.data or []
 
 
+def get_all_notes_with_text(user_id: str, limit: int = 20) -> list[dict]:
+    """Like list_notes, but includes raw_text — used by the Note-Organizer
+    Agent, which needs enough of each note's actual content (not just the
+    title) to judge subject-tag accuracy and spot likely duplicates."""
+    client = get_client()
+    result = (
+        client.table("notes")
+        .select("id, title, subject, raw_text")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data or []
+
+
+def update_note_subject(user_id: str, note_id: str, subject: str) -> dict | None:
+    """Only the owner (verified via their session token) can retag a note —
+    used by the Note-Organizer Agent's one-click 'apply' on a suggested
+    subject, and safe/reversible since it only ever touches the subject
+    field, never the note's actual content."""
+    client = get_client()
+    result = (
+        client.table("notes")
+        .update({"subject": (subject or "General").strip()[:60] or "General"})
+        .eq("user_id", user_id)
+        .eq("id", note_id)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
 def award_xp(user_id: str, amount: int) -> dict:
     """Adds XP and bumps the streak if the last activity was yesterday or today."""
     client = get_client()

@@ -257,6 +257,15 @@ export async function getConfidenceCalibration() {
   return handle(res);
 }
 
+export async function getStudyCoachAdvice(goal = "") {
+  const res = await fetch(`${API_BASE}/api/coach/advise`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ goal }),
+  });
+  return handle(res);
+}
+
 export async function createStudyPlan({ goal, noteIds }) {
   const res = await fetch(`${API_BASE}/api/planner/plan`, {
     method: "POST",
@@ -402,6 +411,23 @@ export async function resetDemoAccount(userId) {
     method: "POST",
     headers: await authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ user_id: userId }),
+  });
+  return handle(res);
+}
+
+export async function runNoteOrganizer() {
+  const res = await fetch(`${API_BASE}/api/organizer/analyze`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+  });
+  return handle(res);
+}
+
+export async function applyNoteSubject(noteId, subject) {
+  const res = await fetch(`${API_BASE}/api/notes/${noteId}/subject`, {
+    method: "PATCH",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ subject }),
   });
   return handle(res);
 }

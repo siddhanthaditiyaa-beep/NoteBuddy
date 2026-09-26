@@ -5,7 +5,7 @@ from slowapi import _rate_limit_exceeded_handler
 
 from app.config import FRONTEND_ORIGIN, SENTRY_DSN
 from app.rate_limit import limiter
-from app.routers import notes, chat, user, demo, review, planner, push, practice
+from app.routers import notes, chat, user, demo, review, planner, push, practice, coach, organizer
 
 # --- Error tracking (Sentry free tier — no-op if SENTRY_DSN isn't set) -----
 if SENTRY_DSN:
@@ -36,6 +36,8 @@ app.include_router(review.router)
 app.include_router(planner.router)
 app.include_router(push.router)
 app.include_router(practice.router)
+app.include_router(coach.router)
+app.include_router(organizer.router)
 
 
 @app.get("/")

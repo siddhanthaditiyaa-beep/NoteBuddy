@@ -570,6 +570,26 @@ async def share_note(
     return {"note_id": note_id, "is_public": req.is_public}
 
 
+class SubjectRequest(BaseModel):
+    subject: str
+
+
+@router.patch("/{note_id}/subject")
+async def update_subject(
+    note_id: str, req: SubjectRequest, current_user: CurrentUser = Depends(get_current_user)
+):
+    """Retags a note's subject — powers the Note-Organizer Agent's one-click
+    'apply' on a suggested subject. Only the owner (verified via their
+    session token) can retag, and this only ever touches the subject field."""
+    try:
+        updated = supabase_client.update_note_subject(current_user.id, note_id, req.subject)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    if not updated:
+        raise HTTPException(404, "Note not found")
+    return {"note_id": note_id, "subject": updated.get("subject", req.subject)}
+
+
 @router.post("/{note_id}/regenerate")
 @limiter.limit("10/minute")
 async def regenerate_note(

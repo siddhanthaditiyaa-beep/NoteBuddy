@@ -12,9 +12,11 @@ import { getBadgeVisual } from "../lib/badges";
 import { listNotes, getProgress, getNote, getWeakTopics, searchNotes } from "../lib/api";
 import { shareAchievementCard } from "../lib/achievementCard";
 import InsightsPanel from "../components/InsightsPanel";
+import StudyCoach from "../components/StudyCoach";
 import SyllabusGapTracker from "../components/SyllabusGapTracker";
 import ClassHeatmap from "../components/ClassHeatmap";
 import StudyBuddyPanel from "../components/StudyBuddyPanel";
+import NoteOrganizer from "../components/NoteOrganizer";
 import toast from "react-hot-toast";
 
 function getGreeting(user, notesCount, demo) {
@@ -247,7 +249,19 @@ export default function Dashboard() {
             </div>
           )}
 
+          {notes.length > 0 && (
+            <div className="mb-8">
+              <StudyCoach />
+            </div>
+          )}
+
           {notes.length > 0 && <InsightsPanel />}
+
+          {notes.length >= 2 && (
+            <div className="mb-8">
+              <NoteOrganizer />
+            </div>
+          )}
 
           {notes.length > 0 && (
             <div className="mb-8 grid sm:grid-cols-2 gap-4">
