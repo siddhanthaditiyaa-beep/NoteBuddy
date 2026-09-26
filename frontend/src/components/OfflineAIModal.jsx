@@ -61,7 +61,8 @@ export default function OfflineAIModal({ open, onClose }) {
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-label="Offline AI"
-              className="w-full max-w-sm bg-white rounded-xl2 shadow-pop p-5 sm:p-6 max-h-[85vh] overflow-y-auto"
+              className="w-full max-w-sm bg-white rounded-xl2 shadow-pop p-5 sm:p-6 max-h-[85dvh] overflow-y-auto overscroll-contain"
+              style={{ WebkitOverflowScrolling: "touch" }}
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="w-11 h-11 rounded-xl2 bg-primary-50 flex items-center justify-center text-primary-500 shrink-0">

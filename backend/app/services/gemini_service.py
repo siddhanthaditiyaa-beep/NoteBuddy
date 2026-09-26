@@ -69,6 +69,7 @@ LEVEL_INSTRUCTIONS = {
     "kid": "Explain it like you're talking to a curious 10-year-old: short sentences, everyday words, fun comparisons. Avoid jargon entirely.",
     "beginner": "Explain it simply, as if to someone brand new to the subject. Define any technical term the first time you use it.",
     "student": "Explain it at a standard high-school/early-college level. You can use normal academic vocabulary.",
+    "advanced": "Go deep. Assume the student already has the basics down — cover nuance, edge cases, the 'why' behind the rule (not just the rule itself), and how this connects to related concepts. Use precise technical vocabulary without over-explaining it.",
 }
 
 # A student can type any language name into the selector, so this is a

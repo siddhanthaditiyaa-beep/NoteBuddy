@@ -103,7 +103,7 @@ export default function Results() {
   const [noteId] = useState(stored?.note?.id);
   const [language] = useState(stored?.language || "English");
   const [tab, setTab] = useState("summary");
-  const [level, setLevel] = useState("beginner");
+  const [level, setLevel] = useState("student");
   const [regenLoading, setRegenLoading] = useState(false);
   const [shareUrl, setShareUrl] = useState(null);
   const [sharing, setSharing] = useState(false);

@@ -105,7 +105,7 @@ export default function Upload() {
   const EXAMPLES = useMemo(() => pickExamplesFor(user?.user_metadata?.study_subject), [user]);
   const [mode, setMode] = useState("text");
   const [text, setText] = useState("");
-  const [level, setLevel] = useState("beginner");
+  const [level, setLevel] = useState("student");
   const [quizCount, setQuizCount] = useState(5);
   const [language, setLanguage] = useState("English");
   // Default Exam Cram Mode on for students who told us at signup they have

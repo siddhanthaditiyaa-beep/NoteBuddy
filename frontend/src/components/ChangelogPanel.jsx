@@ -33,7 +33,16 @@ export default function ChangelogPanel({ open, onClose }) {
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-label="What's new in NoteBuddy"
-              className="w-full max-w-md max-h-[85vh] overflow-y-auto bg-white rounded-xl2 shadow-pop p-5 sm:p-6"
+              // 85vh (not 85dvh) undershoots on mobile: the address bar makes
+              // plain `vh` taller than what's actually visible, so the card's
+              // bottom — and the scrollable list inside it — rendered below
+              // the real fold with no page scroll to reach it (a fixed overlay
+              // doesn't scroll with the page). `dvh` tracks the true visible
+              // viewport instead. overscroll-contain + the inline style stop
+              // an inner scroll from either bubbling to the page or stalling
+              // on older iOS Safari.
+              className="w-full max-w-md max-h-[85dvh] overflow-y-auto overscroll-contain bg-white rounded-xl2 shadow-pop p-5 sm:p-6"
+              style={{ WebkitOverflowScrolling: "touch" }}
             >
               <div className="flex items-center justify-between mb-5">
                 <h2 className="font-display text-lg sm:text-xl font-bold flex items-center gap-2">

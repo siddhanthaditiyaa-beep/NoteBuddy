@@ -96,7 +96,8 @@ function DeleteAccountModal({ open, onClose }) {
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-label="Delete your account"
-              className="w-full max-w-sm bg-white rounded-xl2 shadow-pop p-5 sm:p-6"
+              className="w-full max-w-sm max-h-[85dvh] overflow-y-auto overscroll-contain bg-white rounded-xl2 shadow-pop p-5 sm:p-6"
+              style={{ WebkitOverflowScrolling: "touch" }}
             >
               <div className="w-11 h-11 rounded-xl2 bg-coral-50 flex items-center justify-center text-coral-500 mb-4">
                 <ShieldAlert size={22} />

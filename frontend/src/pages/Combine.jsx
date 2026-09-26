@@ -16,7 +16,7 @@ export default function Combine() {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState([]);
-  const [level, setLevel] = useState("beginner");
+  const [level, setLevel] = useState("student");
   const [quizCount, setQuizCount] = useState(5);
   const [language, setLanguage] = useState("English");
   const [generating, setGenerating] = useState(false);
