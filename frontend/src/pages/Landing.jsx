@@ -1,32 +1,127 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { BookOpen, Brain, Trophy, MessageCircle, Sparkles, ArrowRight } from "lucide-react";
+import {
+  BookOpen,
+  Brain,
+  Trophy,
+  MessageCircle,
+  Sparkles,
+  ArrowRight,
+  Bot,
+  Compass,
+  FolderTree,
+  CalendarDays,
+  FileText,
+  Search,
+  Network,
+  Mic,
+  Timer,
+  Users,
+  WifiOff,
+  ListChecks,
+  ShieldCheck,
+} from "lucide-react";
 import NavBar from "../components/NavBar";
+
+// The four genuinely agentic features — Gemini is handed tools and decides
+// for itself which to call and in what order, instead of following a fixed
+// prompt→JSON script. This is what separates these from every other
+// AI feature in the app.
+const AGENTS = [
+  {
+    icon: CalendarDays,
+    title: "Adaptive Study Planner",
+    desc: "Give it a goal — 'exam Friday on Chemistry' — and it checks your weak topics, due flashcards, and notes before building a day-by-day plan.",
+  },
+  {
+    icon: Compass,
+    title: "Study Coach",
+    desc: "Pulls your real quiz history, confidence calibration, and mistake patterns, then tells you exactly what to do next and why — not generic tips.",
+  },
+  {
+    icon: MessageCircle,
+    title: "Cross-Note Tutor",
+    desc: "Decides for itself whether your question needs a search across every note you've ever saved, not just the one you have open.",
+  },
+  {
+    icon: FolderTree,
+    title: "Note Organizer",
+    desc: "Judges which of your notes are related enough to be worth comparing, then suggests subject-tag fixes, merges, and contradictions.",
+  },
+];
 
 const FEATURES = [
   {
     icon: BookOpen,
     color: "bg-primary-500",
-    title: "Paste, upload, or snap a photo",
-    desc: "Drop in text, a PDF, or even a photo of handwritten notes — NoteBuddy reads it all.",
+    title: "Capture it any way",
+    desc: "Paste text, upload a PDF or photo of handwritten notes, record audio, or drop in a YouTube link — NoteBuddy reads and transcribes all of it.",
   },
   {
     icon: Brain,
     color: "bg-mint-500",
     title: "Explained at your level",
-    desc: "Slide from 'explain like I'm 10' to full student-level detail, any time.",
+    desc: "Slide from 'explain like I'm 10' to full student-level detail, plus an 'explain differently' button when something still isn't clicking.",
   },
   {
     icon: Sparkles,
     color: "bg-sun-500",
-    title: "Flashcards & quizzes, instantly",
-    desc: "AI turns your notes into flip-cards and quizzes made for real learning, not just reading.",
+    title: "A full study kit, instantly",
+    desc: "Summary, key terms, flashcards, quizzes, a visual knowledge graph, and a study podcast — generated from your notes in one go.",
   },
   {
-    icon: MessageCircle,
+    icon: FileText,
     color: "bg-coral-500",
-    title: "Ask follow-up questions",
-    desc: "Confused about a line? Just ask NoteBuddy — it knows your material inside out.",
+    title: "Exam Twin & syllabus gaps",
+    desc: "Generate a full timed mock exam from your notes, auto-graded, plus a tracker that flags what your syllabus covers that your notes don't.",
+  },
+  {
+    icon: ListChecks,
+    color: "bg-primary-500",
+    title: "Practice that checks itself",
+    desc: "Teach-Back (Feynman) mode, confidence-calibration tracking to catch overconfidence, and a mistake-pattern retrospective across all your quizzes.",
+  },
+  {
+    icon: Search,
+    color: "bg-mint-500",
+    title: "Semantic search across everything",
+    desc: "Ask a question and NoteBuddy searches the meaning of every note you've saved, not just keywords — plus a cross-note contradiction & gap detector.",
+  },
+  {
+    icon: Mic,
+    color: "bg-sun-500",
+    title: "Hands-free & accessible",
+    desc: "Voice-first review mode you can run by speaking grades out loud, read-aloud and podcast modes, and an adjustable-size UI for easier reading.",
+  },
+  {
+    icon: Timer,
+    color: "bg-coral-500",
+    title: "Built to keep you consistent",
+    desc: "Spaced-repetition review (SM-2), a built-in Pomodoro timer, XP, streaks, and badges that make sticking with it feel like a game.",
+  },
+  {
+    icon: Users,
+    color: "bg-ink",
+    title: "Study together, privately",
+    desc: "A public gallery of shared study kits, async leaderboards on shared notes, opt-in study-buddy matching, and an anonymized class weak-spot heatmap.",
+  },
+  {
+    icon: WifiOff,
+    color: "bg-primary-500",
+    title: "Works even offline",
+    desc: "An on-device AI model (WebGPU) keeps chat and flashcards working with no connection, and the whole app installs as a PWA.",
+  },
+  {
+    icon: Network,
+    color: "bg-mint-500",
+    title: "Visual knowledge graph",
+    desc: "See how the concepts in a note connect to each other in an interactive force-directed graph, not just a flat list of terms.",
+  },
+  {
+    icon: ShieldCheck,
+    color: "bg-sun-500",
+    title: "Privacy you control",
+    desc: "A plain-language privacy page, one-click account deletion that wipes everything, and student-chosen display names that never expose your email.",
   },
 ];
 
@@ -42,14 +137,14 @@ export default function Landing() {
           transition={{ duration: 0.6 }}
         >
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white shadow-card font-bold text-sm text-primary-600 mb-6">
-            <Sparkles size={14} /> Powered by Generative AI
+            <Bot size={14} /> Powered by Generative &amp; Agentic AI
           </span>
           <h1 className="font-display text-5xl md:text-6xl font-extrabold leading-tight text-ink mb-6">
             Turn any notes into <span className="text-primary-600">a study buddy</span> <br /> that gets you
           </h1>
           <p className="text-lg text-ink/60 font-semibold max-w-xl mx-auto mb-10">
-            Built for kids, beginners, and anyone who finds studying overwhelming.
-            Paste your notes and get summaries, flashcards, and quizzes made just for you.
+            Not just AI-generated flashcards — four real AI agents that look at your actual study data
+            and decide for themselves what you need next.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 px-4">
             <Link
@@ -101,15 +196,58 @@ export default function Landing() {
         </motion.div>
       </section>
 
+      {/* Agentic AI — called out on its own, since this is what makes NoteBuddy
+          more than a wrapper around a single prompt. */}
       <section className="max-w-6xl mx-auto px-6 pb-24">
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="text-center mb-10">
+          <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-ink text-white shadow-card font-bold text-sm mb-4">
+            <Bot size={14} /> Agentic AI
+          </span>
+          <h2 className="font-display text-3xl md:text-4xl font-extrabold text-ink mb-3">
+            Four agents. Real tools. Their own decisions.
+          </h2>
+          <p className="text-ink/60 font-semibold max-w-2xl mx-auto">
+            Each one is handed a set of tools — real functions that read your actual data — and Gemini decides
+            for itself which ones to call, in what order, before answering. Not a fixed script.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {AGENTS.map((a, i) => (
+            <motion.div
+              key={a.title}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.08 }}
+              className="bg-ink rounded-xl2 p-6 shadow-card text-white"
+            >
+              <div className="w-11 h-11 rounded-xl2 bg-white/10 flex items-center justify-center mb-4">
+                <a.icon size={20} />
+              </div>
+              <h3 className="font-display font-bold text-base mb-1.5">{a.title}</h3>
+              <p className="text-white/60 font-semibold text-sm">{a.desc}</p>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      <section className="max-w-6xl mx-auto px-6 pb-24">
+        <div className="text-center mb-10">
+          <h2 className="font-display text-3xl md:text-4xl font-extrabold text-ink mb-3">
+            Everything else you'd want in a study companion
+          </h2>
+          <p className="text-ink/60 font-semibold max-w-2xl mx-auto">
+            All built on top of the same notes you already have.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {FEATURES.map((f, i) => (
             <motion.div
               key={f.title}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
+              transition={{ delay: (i % 3) * 0.1 }}
               className="bg-white rounded-xl2 p-6 shadow-card flex gap-4"
             >
               <div className={`w-12 h-12 rounded-xl2 ${f.color} flex items-center justify-center text-white shrink-0`}>
