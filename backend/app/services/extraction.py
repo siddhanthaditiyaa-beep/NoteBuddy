@@ -7,11 +7,33 @@ from pypdf import PdfReader
 from PIL import Image
 import pytesseract
 
-try:
-    import cv2
-    _CV2_AVAILABLE = True
-except ImportError:
-    _CV2_AVAILABLE = False
+# cv2 (opencv-python-headless) used to be imported here at module level.
+# extraction.py is imported eagerly at FastAPI startup (main.py -> notes.py
+# -> extraction.py), so that top-level `import cv2` ran on every single
+# server boot — including Render's cold starts — even though it's only
+# actually used inside preprocess_for_ocr(), which already has a full
+# graceful fallback for cv2 being missing. Importing it lazily (only when
+# an image note is actually being OCR'd) means a cold start no longer pays
+# opencv's load cost at all unless someone uploads a photo that turns.
+# _cv2_module()/_CV2_AVAILABLE below preserve the exact same
+# available/unavailable behavior, just deferred.
+_cv2_module = None
+_CV2_AVAILABLE = None
+
+
+def _get_cv2():
+    """Imports cv2 on first use and caches the result (module, or None if
+    unavailable) so later calls don't re-pay the import cost or re-check."""
+    global _cv2_module, _CV2_AVAILABLE
+    if _CV2_AVAILABLE is None:
+        try:
+            import cv2 as _cv2
+            _cv2_module = _cv2
+            _CV2_AVAILABLE = True
+        except ImportError:
+            _cv2_module = None
+            _CV2_AVAILABLE = False
+    return _cv2_module
 
 
 def extract_from_pdf(file_bytes: bytes) -> str:
@@ -25,6 +47,7 @@ def _deskew(gray: "np.ndarray") -> "np.ndarray":
     Tesseract's accuracy drops fast once text isn't roughly horizontal.
     Finds the dominant text-block angle via the minimum-area bounding box
     of all "ink" pixels and rotates to correct it."""
+    cv2 = _get_cv2()
     inverted = cv2.bitwise_not(gray)
     coords = np.column_stack(np.where(inverted > 0))
     if coords.shape[0] < 50:  # too little content to get a reliable angle
@@ -50,7 +73,8 @@ def preprocess_for_ocr(file_bytes: bytes) -> bytes:
     photos of handwritten/printed pages, without needing a paid vision API.
     Falls back to the original bytes untouched if OpenCV isn't installed or
     anything goes wrong, so a bad photo never hard-fails the upload."""
-    if not _CV2_AVAILABLE:
+    cv2 = _get_cv2()
+    if cv2 is None:
         return file_bytes
     try:
         arr = np.frombuffer(file_bytes, dtype=np.uint8)

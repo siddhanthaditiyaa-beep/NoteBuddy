@@ -17,16 +17,24 @@ export default defineConfig({
       injectRegister: 'auto',
       registerType: 'autoUpdate',
       devOptions: { enabled: false },
-      injectManifest: {
-        // The offline-AI model runtime (@mlc-ai/web-llm) is a large,
-        // lazily-imported chunk only ever loaded if a student explicitly
-        // opts into Offline AI from the account menu — it must NOT be part
-        // of the app-shell precache every visitor downloads just to open
-        // the site. The model weights it fetches afterward are cached by
-        // web-llm itself (via the Cache API), completely separately from
-        // this service worker's precache list.
-        globIgnores: ['**/lib-*.js'],
-      },
+      // The offline-AI runtime (@mlc-ai/web-llm, the "lib-*.js" chunk) used
+      // to be excluded from the precache manifest via globIgnores, on the
+      // theory that a several-MB chunk shouldn't be forced on every visitor
+      // who never touches Offline AI. In practice that made "download once,
+      // then it works offline" unreliable: it depended on a runtime
+      // CacheFirst route (still below, as a second layer of defense) racing
+      // against page load, and on ordinary browser HTTP caching surviving
+      // until the actual offline test — neither held up in testing. Letting
+      // precacheAndRoute grab it at install time, the same guaranteed way it
+      // grabs every other core asset, is the only version of this that has
+      // actually proven reliable: no globIgnores here means nothing is
+      // excluded. The one-time cost is worth it for a headline feature that
+      // needs to work the moment someone tests it offline.
+      // Workbox refuses to precache anything over 2 MiB by default — and the
+      // web-llm runtime chunk is ~6 MB minified. Raising the ceiling here is
+      // what actually lets precacheAndRoute grab it instead of silently
+      // skipping it (which build output made obvious: "won't be precached").
+      injectManifest: { maximumFileSizeToCacheInBytes: 8 * 1024 * 1024 },
       manifest: {
         name: 'NoteBuddy — AI Study Companion',
         short_name: 'NoteBuddy',

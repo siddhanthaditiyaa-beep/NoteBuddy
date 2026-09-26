@@ -137,7 +137,16 @@ def generate_study_kit(
     rendering path), but the summary becomes a condensed cheat sheet and the
     flashcards are capped at the 10 highest-yield ones."""
     level_instruction = LEVEL_INSTRUCTIONS.get(level, LEVEL_INSTRUCTIONS["beginner"])
-    quiz_count = quiz_count if quiz_count in (5, 10, 15, 20) else 5
+    # Used to silently reset anything outside the 4 preset buttons (5/10/15/20)
+    # back to 5 — harmless while those were the only options, but it quietly
+    # ignored a student's custom count entirely once the UI grew one. Now any
+    # sane number is honored; only a missing/garbage value falls back to 5,
+    # and the upper end is capped so a typo like "500" can't blow up the
+    # prompt or the quiz UI.
+    try:
+        quiz_count = max(1, min(50, int(quiz_count)))
+    except (TypeError, ValueError):
+        quiz_count = 5
     language_instruction = _language_instruction(language)
     weak_instruction = _weak_topics_instruction(weak_topics)
     board_instruction = _board_instruction(board)
