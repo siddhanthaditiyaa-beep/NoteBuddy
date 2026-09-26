@@ -768,6 +768,74 @@ def get_leaderboard(note_id: str, limit: int = 10) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Adaptive Study Planner persistence — previously a generated plan only ever
+# lived in the HTTP response body, so leaving the Planner tab (or refreshing)
+# lost it with no way to come back to it. This table gives each generated
+# plan a row of its own, plus its per-task checked-off state, so the Planner
+# page can list past plans, reopen one, and delete it.
+# ---------------------------------------------------------------------------
+
+
+def save_study_plan(user_id: str, goal: str, plan: dict) -> dict:
+    client = get_client()
+    result = client.table("study_plans").insert({
+        "user_id": user_id,
+        "goal": goal,
+        "plan": plan,
+        "checked": {},
+    }).execute()
+    return result.data[0] if result.data else {}
+
+
+def list_study_plans(user_id: str, limit: int = 30) -> list[dict]:
+    client = get_client()
+    result = (
+        client.table("study_plans")
+        .select("id, goal, plan, checked, created_at")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data or []
+
+
+def get_study_plan(user_id: str, plan_id: str) -> dict | None:
+    client = get_client()
+    result = (
+        client.table("study_plans")
+        .select("id, goal, plan, checked, created_at")
+        .eq("user_id", user_id)
+        .eq("id", plan_id)
+        .maybe_single()
+        .execute()
+    )
+    return result.data if result and result.data else None
+
+
+def delete_study_plan(user_id: str, plan_id: str) -> bool:
+    """Ownership-checked, exactly like delete_note — a student can only ever
+    delete their own saved plans, never one they merely guessed the id of."""
+    client = get_client()
+    owned = client.table("study_plans").select("id").eq("id", plan_id).eq("user_id", user_id).maybe_single().execute()
+    if not owned or not owned.data:
+        return False
+    client.table("study_plans").delete().eq("id", plan_id).eq("user_id", user_id).execute()
+    return True
+
+
+def update_study_plan_checked(user_id: str, plan_id: str, checked: dict) -> bool:
+    """Persists which tasks a student has ticked off so far, so reopening a
+    saved plan later shows the same progress instead of resetting it."""
+    client = get_client()
+    owned = client.table("study_plans").select("id").eq("id", plan_id).eq("user_id", user_id).maybe_single().execute()
+    if not owned or not owned.data:
+        return False
+    client.table("study_plans").update({"checked": checked}).eq("id", plan_id).eq("user_id", user_id).execute()
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Account deletion — a real "delete my account" flow (not just a support
 # email) is one of the plainest trust signals a student-facing app can show
 # in a demo: wipes every row tied to this student, then removes the auth
@@ -777,7 +845,7 @@ def get_leaderboard(note_id: str, limit: int = 10) -> list[dict]:
 
 def delete_account(user_id: str) -> None:
     client = get_client()
-    for table in ("notes", "flashcard_progress", "topic_progress", "push_subscriptions"):
+    for table in ("notes", "flashcard_progress", "topic_progress", "push_subscriptions", "study_plans"):
         try:
             client.table(table).delete().eq("user_id", user_id).execute()
         except Exception:

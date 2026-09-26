@@ -198,19 +198,18 @@ function TourCard({ tour, step, anchorRect }) {
       </div>
       <p className="text-sm font-semibold text-ink/60 leading-relaxed mb-4">{step.body}</p>
 
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex gap-1.5">
-          {Array.from({ length: total }).map((_, i) => (
-            <span
-              key={i}
-              className={`h-1.5 rounded-full transition-all ${
-                i === stepIndex ? "w-5 bg-primary-500" : "w-1.5 bg-primary-100"
-              }`}
-            />
-          ))}
-        </div>
+      {/* flex-wrap is a safety net; the real fix is the step count below —
+          a one-dot-per-step indicator kept growing every time a tour step
+          was added (8 -> 10 steps in recent batches) until it pushed the
+          Next button right past the card's edge, since this row never
+          wrapped. A "N / total" label stays a fixed width regardless of
+          how many steps the tour ever has. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap gap-y-2">
+        <span className="text-xs font-bold text-ink/40 tabular-nums shrink-0">
+          {stepIndex + 1} / {total}
+        </span>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {stepIndex > 0 && (
             <button
               onClick={back}

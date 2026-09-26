@@ -275,6 +275,41 @@ export async function createStudyPlan({ goal, noteIds }) {
   return handle(res);
 }
 
+// Adaptive Study Planner persistence — a generated plan used to only ever
+// live in the response above, so leaving the Planner tab (or refreshing)
+// lost it with nothing to come back to. These let the page list past plans,
+// reopen one, delete it, and keep its checked-off tasks saved.
+export async function listStudyPlans() {
+  const res = await fetch(`${API_BASE}/api/planner/plans`, {
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
+export async function getStudyPlan(planId) {
+  const res = await fetch(`${API_BASE}/api/planner/plans/${planId}`, {
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
+export async function deleteStudyPlan(planId) {
+  const res = await fetch(`${API_BASE}/api/planner/plans/${planId}`, {
+    method: "DELETE",
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
+export async function updateStudyPlanChecked(planId, checked) {
+  const res = await fetch(`${API_BASE}/api/planner/plans/${planId}/checked`, {
+    method: "PATCH",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ checked }),
+  });
+  return handle(res);
+}
+
 export async function explainDifferently({ contextText, concept }) {
   const res = await fetch(`${API_BASE}/api/practice/explain-differently`, {
     method: "POST",

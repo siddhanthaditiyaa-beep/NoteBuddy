@@ -1,27 +1,47 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
-import { CalendarDays, Wand2, CheckSquare, Square, Sparkles } from "lucide-react";
+import { CalendarDays, Wand2, CheckSquare, Square, Sparkles, History, Trash2, Plus } from "lucide-react";
 import NavBar from "../components/NavBar";
 import { useAuth } from "../context/AuthContext";
-import { listNotes, createStudyPlan } from "../lib/api";
+import {
+  listNotes,
+  createStudyPlan,
+  listStudyPlans,
+  deleteStudyPlan,
+  updateStudyPlanChecked,
+} from "../lib/api";
 
 // The one genuinely agentic feature in NoteBuddy: instead of one prompt in,
 // one answer out, Gemini is handed tools (due flashcards, weak topics,
 // note summaries) and decides for itself what to check and how to weigh it
 // into a day-by-day plan — see backend/app/services/planner_service.py.
+//
+// Every generated plan is now saved server-side (see backend/app/routers/
+// planner.py + supabase_client.py) instead of only ever living in this
+// page's local state, which used to vanish the moment a student left the
+// tab or refreshed. `activePlanId` tracks which saved row (if any) is on
+// screen, so ticking a task can persist that change to the same row.
 export default function Planner() {
   const { user } = useAuth();
   const [goal, setGoal] = useState("");
   const [notes, setNotes] = useState([]);
   const [selectedNoteIds, setSelectedNoteIds] = useState([]);
   const [plan, setPlan] = useState(null);
+  const [activePlanId, setActivePlanId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [checked, setChecked] = useState({});
+  const [pastPlans, setPastPlans] = useState([]);
+  const [pastPlansOpen, setPastPlansOpen] = useState(true);
+
+  const refreshPastPlans = () => {
+    listStudyPlans().then((res) => setPastPlans(res.plans || [])).catch(() => {});
+  };
 
   useEffect(() => {
     if (!user) return;
     listNotes(user.id).then((res) => setNotes(res.notes || [])).catch(() => {});
+    refreshPastPlans();
   }, [user]);
 
   const toggleNote = (id) => {
@@ -30,7 +50,13 @@ export default function Planner() {
 
   const toggleTask = (dayIdx, taskIdx) => {
     const key = `${dayIdx}-${taskIdx}`;
-    setChecked((prev) => ({ ...prev, [key]: !prev[key] }));
+    setChecked((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      // Best-effort — a student's ticked-off progress is worth saving, but
+      // shouldn't ever block or error out the actual checking-off gesture.
+      if (activePlanId) updateStudyPlanChecked(activePlanId, next).catch(() => {});
+      return next;
+    });
   };
 
   const generate = async () => {
@@ -43,10 +69,40 @@ export default function Planner() {
     try {
       const res = await createStudyPlan({ goal: goal.trim(), noteIds: selectedNoteIds.length ? selectedNoteIds : undefined });
       setPlan(res.plan);
+      setActivePlanId(res.id || null);
+      refreshPastPlans();
     } catch (e) {
       toast.error(e.message || "Couldn't build a plan right now — try again in a moment.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openPastPlan = (p) => {
+    setPlan(p.plan);
+    setChecked(p.checked || {});
+    setActivePlanId(p.id);
+    setGoal(p.goal || "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const startNewPlan = () => {
+    setPlan(null);
+    setActivePlanId(null);
+    setChecked({});
+    setGoal("");
+    setSelectedNoteIds([]);
+  };
+
+  const removePastPlan = async (e, planId) => {
+    e.stopPropagation();
+    try {
+      await deleteStudyPlan(planId);
+      setPastPlans((prev) => prev.filter((p) => p.id !== planId));
+      if (activePlanId === planId) startNewPlan();
+      toast.success("Plan deleted.");
+    } catch (err) {
+      toast.error(err.message || "Couldn't delete that plan — try again.");
     }
   };
 
@@ -62,6 +118,58 @@ export default function Planner() {
           <p className="text-ink/60 font-semibold mb-6">
             Tell NoteBuddy your goal — it'll check what's due, what you're weak on, and build a day-by-day plan around it.
           </p>
+
+          {pastPlans.length > 0 && (
+            <div className="mb-6 bg-white rounded-xl2 shadow-card overflow-hidden">
+              <button
+                onClick={() => setPastPlansOpen((v) => !v)}
+                className="w-full flex items-center justify-between p-4"
+              >
+                <span className="flex items-center gap-2 font-bold text-sm text-ink/70">
+                  <History size={16} /> Your past plans ({pastPlans.length})
+                </span>
+                {activePlanId && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startNewPlan();
+                    }}
+                    className="flex items-center gap-1 text-xs font-bold text-primary-600 hover:text-primary-700"
+                  >
+                    <Plus size={14} /> New plan
+                  </span>
+                )}
+              </button>
+              {pastPlansOpen && (
+                <div className="border-t border-primary-50 divide-y divide-primary-50 max-h-64 overflow-y-auto">
+                  {pastPlans.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => openPastPlan(p)}
+                      className={`w-full flex items-center justify-between gap-3 p-4 text-left transition-colors ${
+                        activePlanId === p.id ? "bg-primary-50" : "hover:bg-primary-50/50"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm text-ink/80 truncate">{p.goal}</p>
+                        <p className="text-xs font-semibold text-ink/40">
+                          {(p.plan?.days || []).length} day{(p.plan?.days || []).length === 1 ? "" : "s"} ·{" "}
+                          {p.created_at ? new Date(p.created_at).toLocaleDateString() : ""}
+                        </p>
+                      </div>
+                      <span
+                        onClick={(e) => removePastPlan(e, p.id)}
+                        className="p-2 rounded-xl2 text-ink/30 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+                        title="Delete this plan"
+                      >
+                        <Trash2 size={16} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <textarea
             value={goal}
