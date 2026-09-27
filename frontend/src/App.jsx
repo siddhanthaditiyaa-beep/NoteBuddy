@@ -7,6 +7,7 @@ import { FontSizeProvider } from "./context/FontSizeContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Spotlight from "./components/Spotlight";
 import BottomNav from "./components/BottomNav";
+import InactivityGuard from "./components/InactivityGuard";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -28,6 +29,7 @@ export default function App() {
       <BrowserRouter>
         <TourProvider>
           <Toaster position="top-center" toastOptions={{ style: { fontWeight: 700 } }} />
+          <InactivityGuard />
           <Spotlight />
           <BottomNav />
           <Routes>
