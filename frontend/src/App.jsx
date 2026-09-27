@@ -8,6 +8,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Spotlight from "./components/Spotlight";
 import BottomNav from "./components/BottomNav";
 import InactivityGuard from "./components/InactivityGuard";
+import OfflineEnginePrewarmer from "./components/OfflineEnginePrewarmer";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -30,6 +31,7 @@ export default function App() {
         <TourProvider>
           <Toaster position="top-center" toastOptions={{ style: { fontWeight: 700 } }} />
           <InactivityGuard />
+          <OfflineEnginePrewarmer />
           <Spotlight />
           <BottomNav />
           <Routes>

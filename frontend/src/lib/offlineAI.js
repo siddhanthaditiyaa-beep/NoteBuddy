@@ -115,6 +115,31 @@ export async function initOfflineModel(onProgress) {
   return enginePromise;
 }
 
+// Warms the engine up in the background the moment the app notices it's
+// offline with a previously-downloaded model, instead of waiting for the
+// first actual chat message or flashcard "explain differently" click to
+// pay that cold-start cost. Re-creating the engine from cached weights
+// after a fresh page load (not just resuming an already-warm in-memory
+// engine from earlier in the same tab) can take a real, noticeable amount
+// of time — a flashcard click that fires this for the first time can look
+// "stuck" or "broken" if nothing has already kicked it off. Safe to call
+// often: initOfflineModel() itself dedupes concurrent/repeat calls via
+// enginePromise/engineInstance, and any failure here is silent — the
+// normal call sites (chat, flashcards) still run initOfflineModel() again
+// on actual use and surface a real error there if it genuinely can't load.
+let prewarmAttempted = false;
+export function prewarmOfflineModelIfNeeded() {
+  if (prewarmAttempted) return;
+  if (typeof navigator === "undefined" || navigator.onLine) return;
+  if (!isOfflineModelReady()) return;
+  prewarmAttempted = true;
+  initOfflineModel().catch(() => {
+    // Let the next real attempt (chat send / explain differently) retry
+    // and show its own error — this call is purely a head start.
+    prewarmAttempted = false;
+  });
+}
+
 export function unloadOfflineModel() {
   engineInstance?.unload?.();
   engineInstance = null;
