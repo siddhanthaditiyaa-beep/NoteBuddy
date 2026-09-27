@@ -1,11 +1,11 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
-import { Sparkles, Wand2 } from "lucide-react";
+import { Sparkles, Wand2, Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { DEMO_EMAIL, DEMO_PASSWORD } from "../lib/constants";
-import { resetDemoAccount } from "../lib/api";
+import { resetDemoAccount, wakeBackend } from "../lib/api";
 
 function GoogleIcon(props) {
   return (
@@ -36,7 +36,29 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
   const passwordRef = useRef(null);
+
+  // Fire the moment this page loads (fire-and-forget) so a free-tier
+  // backend that's spun down from inactivity is already waking up in the
+  // background before anyone's even touched the "demo" button — see
+  // wakeBackend's comment for why login otherwise eats that cold-start cost.
+  useEffect(() => {
+    wakeBackend();
+  }, []);
+
+  const finishDemoLogin = async (userId) => {
+    // Wipe the demo account's data so every run starts fresh, and make
+    // sure the onboarding tour shows again for this demo session.
+    try {
+      await resetDemoAccount(userId);
+    } catch {
+      /* non-fatal — demo still works, just may show old data */
+    }
+    localStorage.removeItem(`notebuddy_tour_seen_${userId}`);
+    toast.success("Demo ready — everything's reset for you!");
+    navigate("/dashboard");
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -48,21 +70,12 @@ export default function Login() {
       return;
     }
 
-    const loggedInIsDemo = email.toLowerCase() === DEMO_EMAIL;
-    if (loggedInIsDemo && data?.user?.id) {
-      // Wipe the demo account's data so every run starts fresh, and make
-      // sure the onboarding tour shows again for this demo session.
-      try {
-        await resetDemoAccount(data.user.id);
-      } catch {
-        /* non-fatal — demo still works, just may show old data */
-      }
-      localStorage.removeItem(`notebuddy_tour_seen_${data.user.id}`);
-      toast.success("Demo ready — everything's reset for you!");
+    if (email.toLowerCase() === DEMO_EMAIL && data?.user?.id) {
+      await finishDemoLogin(data.user.id);
     } else {
       toast.success("Welcome back!");
+      navigate("/dashboard");
     }
-    navigate("/dashboard");
   };
 
   const handleGoogle = async () => {
@@ -70,10 +83,24 @@ export default function Login() {
     if (error) toast.error(error.message);
   };
 
-  const fillDemo = () => {
+  // One click, not "fill the form, then also click Log in" — the old
+  // two-step version was the actual source of "this doesn't feel
+  // spontaneous," not raw speed. Still fills the visible fields too, so if
+  // this fails for any reason the student can just hit the normal Log in
+  // button as a fallback instead of being stuck.
+  const loginAsDemo = async () => {
+    if (demoLoading || loading) return;
     setEmail(DEMO_EMAIL);
     setPassword(DEMO_PASSWORD);
-    toast.success("Demo details filled — click Log in!");
+    setDemoLoading(true);
+    const { data, error } = await signIn(DEMO_EMAIL, DEMO_PASSWORD);
+    if (error) {
+      setDemoLoading(false);
+      toast.error(error.message);
+      return;
+    }
+    await finishDemoLogin(data.user.id);
+    setDemoLoading(false);
   };
 
   return (
@@ -95,10 +122,19 @@ export default function Login() {
 
         <button
           type="button"
-          onClick={fillDemo}
-          className="w-full mb-4 py-2.5 rounded-xl2 border-2 border-sun-300 bg-sun-300/10 text-ink font-bold text-sm flex items-center justify-center gap-2 hover:bg-sun-300/20 transition-colors"
+          onClick={loginAsDemo}
+          disabled={demoLoading || loading}
+          className="w-full mb-4 py-2.5 rounded-xl2 border-2 border-sun-300 bg-sun-300/10 text-ink font-bold text-sm flex items-center justify-center gap-2 hover:bg-sun-300/20 disabled:opacity-60 transition-colors"
         >
-          <Wand2 size={16} className="text-sun-500" /> Try the demo account
+          {demoLoading ? (
+            <>
+              <Loader2 size={16} className="text-sun-500 animate-spin" /> Setting up your demo...
+            </>
+          ) : (
+            <>
+              <Wand2 size={16} className="text-sun-500" /> Try the demo account
+            </>
+          )}
         </button>
 
         <button

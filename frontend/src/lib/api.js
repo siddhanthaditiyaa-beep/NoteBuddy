@@ -2,6 +2,17 @@ import { supabase } from "./supabaseClient";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
+// Free-tier backend hosts (Render, etc.) spin down after inactivity, so the
+// very first request after a while can cost 20-50+ seconds just waking the
+// instance up — no code path makes that faster. Login.jsx fires this the
+// moment the login page mounts (fire-and-forget, errors ignored) so a cold
+// backend is already waking up in the background well before the student
+// has finished typing/clicking anything, instead of that whole wake-up cost
+// landing entirely on the login request itself.
+export function wakeBackend() {
+  fetch(`${API_BASE}/health`).catch(() => {});
+}
+
 // Every request now carries the learner's real Supabase session token —
 // the backend verifies it and derives who's asking from that, rather than
 // trusting whatever user_id a request claims to be. userId params kept on

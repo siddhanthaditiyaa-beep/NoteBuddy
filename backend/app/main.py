@@ -40,6 +40,14 @@ app.include_router(coach.router)
 app.include_router(organizer.router)
 
 
+@app.get("/health")
+async def health():
+    """No auth, no DB call — exists purely so the frontend (or an uptime
+    pinger) can wake a free-tier host that's spun down from inactivity
+    without that wake-up cost landing on a real request like login."""
+    return {"status": "ok"}
+
+
 @app.get("/")
 async def root():
     return {"status": "ok", "service": "NoteBuddy API"}
