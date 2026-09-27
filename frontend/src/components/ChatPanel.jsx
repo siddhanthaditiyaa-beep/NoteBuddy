@@ -1,9 +1,33 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
-import { Send, Bot, User, Mic, Square, WifiOff } from "lucide-react";
+import { Send, Bot, User, Mic, Square, WifiOff, ArrowDown } from "lucide-react";
 import { chatAboutNotes } from "../lib/api";
 import { isOfflineModelReady, askOfflineAI } from "../lib/offlineAI";
+
+// Inline auto-generated diagram — renders the tiny step-chain a chat reply
+// sometimes comes with (see extract_chat_diagram on the backend) as a
+// small vertical flow of boxes right inside the chat bubble, instead of
+// leaving a described process as just a wall of prose.
+function InlineDiagram({ steps }) {
+  if (!steps?.length) return null;
+  return (
+    <div className="mt-2.5 space-y-1">
+      {steps.map((step, i) => (
+        <div key={i}>
+          <div className="px-2.5 py-1.5 rounded-xl bg-white/70 border border-primary-200 text-xs font-bold text-ink/80">
+            {step}
+          </div>
+          {i < steps.length - 1 && (
+            <div className="flex justify-center py-0.5 text-primary-400">
+              <ArrowDown size={12} />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const SpeechRecognitionAPI =
   typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
@@ -96,8 +120,8 @@ export default function ChatPanel({ rawText, language = "English" }) {
     }
 
     try {
-      const { reply } = await chatAboutNotes({ rawText, question, history: nextMessages, language });
-      setMessages((m) => [...m, { role: "assistant", content: reply }]);
+      const { reply, diagram } = await chatAboutNotes({ rawText, question, history: nextMessages, language });
+      setMessages((m) => [...m, { role: "assistant", content: reply, diagram: diagram?.steps }]);
     } catch (e) {
       const offlineHint = isOffline
         ? " You're offline — download Offline AI from the account menu to keep chatting without a connection."
@@ -135,6 +159,7 @@ export default function ChatPanel({ rawText, language = "English" }) {
               }`}
             >
               {m.content}
+              {m.role === "assistant" && <InlineDiagram steps={m.diagram} />}
             </div>
             {m.role === "user" && (
               <div className="w-7 h-7 rounded-full bg-ink/10 flex items-center justify-center shrink-0">

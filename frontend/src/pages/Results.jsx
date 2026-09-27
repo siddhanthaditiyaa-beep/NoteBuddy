@@ -22,8 +22,10 @@ import {
   GraduationCap,
   FileText,
   Network,
+  Swords,
   ChevronLeft,
   ChevronRight,
+  Image,
 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import FlashcardDeck from "../components/FlashcardDeck";
@@ -32,11 +34,13 @@ import Quiz from "../components/Quiz";
 import ChatPanel from "../components/ChatPanel";
 import PracticeMode from "../components/PracticeMode";
 import TeachBackMode from "../components/TeachBackMode";
+import DebateMode from "../components/DebateMode";
 import ExamTwin from "../components/ExamTwin";
 import KnowledgeGraph from "../components/KnowledgeGraph";
 import LevelSlider from "../components/LevelSlider";
 import { useAuth } from "../context/AuthContext";
-import { regenerateNote, shareNote, recordQuizAnswer } from "../lib/api";
+import { regenerateNote, shareNote, recordQuizAnswer, listNotes } from "../lib/api";
+import { shareInfographic } from "../lib/infographic";
 
 // Maps the language names used across the app (see LanguageSelector /
 // SUPPORTED_LANGUAGES on the backend) to a BCP-47 tag so the browser picks
@@ -62,6 +66,7 @@ const TABS = [
   { id: "flashcards", label: "Flashcards", icon: Layers },
   { id: "practice", label: "Practice", icon: PenLine },
   { id: "teachback", label: "Teach It Back", icon: GraduationCap },
+  { id: "debate", label: "Debate Mode", icon: Swords },
   { id: "exam", label: "Exam Twin", icon: FileText, requiresNoteId: true },
   { id: "graph", label: "Concept Map", icon: Network, requiresNoteId: true },
   { id: "quiz", label: "Quiz", icon: ListChecks },
@@ -133,6 +138,21 @@ export default function Results() {
   const [shareUrl, setShareUrl] = useState(null);
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // How many other notes share this note's subject — feeds the knowledge
+  // graph's "map all of <subject>" cross-note option, which only makes
+  // sense once there's actually more than one note to span.
+  const [subjectNoteCount, setSubjectNoteCount] = useState(0);
+  useEffect(() => {
+    const subject = studyKit?.subject;
+    if (!user || !subject) return;
+    listNotes(user.id)
+      .then((res) => {
+        const count = (res.notes || []).filter((n) => (n.subject || "General") === subject).length;
+        setSubjectNoteCount(count);
+      })
+      .catch(() => {});
+  }, [user, studyKit?.subject]);
 
   // "summary" | "podcast" | null — which one (if any) the AudioPlayerBar is
   // currently playing. altAnswers tracks whatever explanation is CURRENTLY
@@ -313,6 +333,20 @@ export default function Results() {
     toast.success("In Anki: Import File → pick this CSV → set fields as Front, Back.");
   };
 
+  const downloadPoster = async () => {
+    try {
+      const result = await shareInfographic({
+        title: studyKit.title,
+        subject: studyKit.subject,
+        keyTerms: studyKit.key_terms,
+        mindMap: studyKit.mind_map,
+      });
+      if (result === "downloaded") toast.success("Poster saved — print it or stick it up before your exam!");
+    } catch (e) {
+      if (e.name !== "AbortError") toast.error("Couldn't create the poster right now.");
+    }
+  };
+
   const handleQuizAnswer = ({ topic, correct, question, chosenAnswer, correctAnswer, confidence }) => {
     recordQuizAnswer({ topic, correct, noteId, question, chosenAnswer, correctAnswer, confidence }).catch(() => {});
   };
@@ -355,6 +389,14 @@ export default function Results() {
                 className="w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors"
               >
                 <Download size={16} />
+              </button>
+              <button
+                onClick={downloadPoster}
+                title="Export a one-page study poster (key terms + concept map)"
+                aria-label="Export a one-page study poster"
+                className="w-9 h-9 rounded-xl2 bg-white shadow-card flex items-center justify-center text-ink/60 hover:text-primary-600 transition-colors"
+              >
+                <Image size={16} />
               </button>
               <button
                 onClick={downloadAnkiCsv}
@@ -492,6 +534,11 @@ export default function Results() {
                     <TeachBackMode cards={studyKit.flashcards} rawText={rawText} />
                   </div>
                 )}
+                {tab === "debate" && (
+                  <div className="bg-white rounded-xl2 shadow-card p-8">
+                    <DebateMode rawText={rawText} />
+                  </div>
+                )}
                 {tab === "exam" && noteId && (
                   <div className="bg-white rounded-xl2 shadow-card p-8">
                     <ExamTwin noteId={noteId} rawText={rawText} board={user?.user_metadata?.board} />
@@ -499,7 +546,7 @@ export default function Results() {
                 )}
                 {tab === "graph" && noteId && (
                   <div className="bg-white rounded-xl2 shadow-card p-8">
-                    <KnowledgeGraph noteId={noteId} />
+                    <KnowledgeGraph noteId={noteId} subject={studyKit?.subject} subjectNoteCount={subjectNoteCount} />
                   </div>
                 )}
                 {tab === "quiz" && (

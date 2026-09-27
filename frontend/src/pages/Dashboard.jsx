@@ -11,10 +11,12 @@ import { isDemoUser } from "../lib/constants";
 import { getBadgeVisual } from "../lib/badges";
 import { listNotes, getProgress, getNote, getWeakTopics, searchNotes, deleteNote } from "../lib/api";
 import { shareAchievementCard } from "../lib/achievementCard";
+import ExamReadinessCard from "../components/ExamReadinessCard";
 import InsightsPanel from "../components/InsightsPanel";
 import StudyCoach from "../components/StudyCoach";
 import SyllabusGapTracker from "../components/SyllabusGapTracker";
 import ClassHeatmap from "../components/ClassHeatmap";
+import HardestQuestionsPanel from "../components/HardestQuestionsPanel";
 import StudyBuddyPanel from "../components/StudyBuddyPanel";
 import NoteOrganizer from "../components/NoteOrganizer";
 import toast from "react-hot-toast";
@@ -170,6 +172,8 @@ export default function Dashboard() {
               : "Here's where your learning is at."}
           </p>
 
+          {notes.length > 0 && <ExamReadinessCard />}
+
           <div className="grid sm:grid-cols-3 gap-4 mb-4">
             <div className="sm:col-span-2">
               <XPBar
@@ -273,6 +277,12 @@ export default function Dashboard() {
           {notes.length > 0 && (
             <div className="mb-8">
               <ClassHeatmap />
+            </div>
+          )}
+
+          {notes.length > 0 && (
+            <div className="mb-8">
+              <HardestQuestionsPanel subjects={subjects} />
             </div>
           )}
 

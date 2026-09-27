@@ -9,7 +9,7 @@ from app.rate_limit import limiter
 from app.services import supabase_client
 from app.services.gemini_service import (
     explain_differently, grade_short_answer, evaluate_teach_back,
-    analyze_mistake_patterns, AIGenerationError,
+    analyze_mistake_patterns, start_debate, debate_respond, AIGenerationError,
 )
 
 router = APIRouter(prefix="/api/practice", tags=["practice"])
@@ -28,7 +28,11 @@ async def explain_differently_route(
     if not req.concept or not req.concept.strip():
         raise HTTPException(400, "Nothing to re-explain.")
     try:
-        explanation = explain_differently(req.context_text, req.concept)
+        analogy_domain = supabase_client.get_analogy_domain(current_user.id)
+    except RuntimeError:
+        analogy_domain = None
+    try:
+        explanation = explain_differently(req.context_text, req.concept, analogy_domain=analogy_domain)
     except AIGenerationError:
         raise HTTPException(502, "Couldn't get another explanation right now — please try again.")
     return {"explanation": explanation}
@@ -71,9 +75,61 @@ async def teach_back_route(
     if not req.explanation or len(req.explanation.strip()) < 15:
         raise HTTPException(400, "Try explaining it in a bit more detail — a sentence or two at least.")
     try:
-        result = evaluate_teach_back(req.context_text, req.concept, req.explanation)
+        analogy_domain = supabase_client.get_analogy_domain(current_user.id)
+    except RuntimeError:
+        analogy_domain = None
+    try:
+        result = evaluate_teach_back(req.context_text, req.concept, req.explanation, analogy_domain=analogy_domain)
     except AIGenerationError:
         raise HTTPException(502, "Couldn't check that explanation right now — please try again.")
+    return result
+
+
+class DebateStartRequest(BaseModel):
+    context_text: str
+
+
+@router.post("/debate/start")
+@limiter.limit("20/minute")
+async def debate_start_route(
+    request: Request, req: DebateStartRequest, current_user: CurrentUser = Depends(get_current_user)
+):
+    """Debate Mode — opens a debate by picking a genuinely debatable point
+    from the notes and arguing the opposing side of it."""
+    if not req.context_text or len(req.context_text.strip()) < 30:
+        raise HTTPException(400, "Not enough material here to find a debatable point.")
+    try:
+        result = start_debate(req.context_text)
+    except AIGenerationError:
+        raise HTTPException(502, "Couldn't start a debate right now — please try again.")
+    return result
+
+
+class DebateTurn(BaseModel):
+    role: str  # "ai" | "student"
+    text: str
+
+
+class DebateRespondRequest(BaseModel):
+    context_text: str
+    claim: str
+    history: list[DebateTurn] = []
+    student_response: str
+
+
+@router.post("/debate/respond")
+@limiter.limit("20/minute")
+async def debate_respond_route(
+    request: Request, req: DebateRespondRequest, current_user: CurrentUser = Depends(get_current_user)
+):
+    if not req.student_response or len(req.student_response.strip()) < 5:
+        raise HTTPException(400, "Write a response to push back with first.")
+    try:
+        result = debate_respond(
+            req.context_text, req.claim, [t.model_dump() for t in req.history], req.student_response
+        )
+    except AIGenerationError:
+        raise HTTPException(502, "Couldn't respond to that right now — please try again.")
     return result
 
 

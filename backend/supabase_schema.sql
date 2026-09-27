@@ -21,6 +21,14 @@ create table if not exists notes (
 -- Safe to re-run: adds the column if this table already existed without it.
 alter table notes add column if not exists subject text default 'General';
 
+-- Personalized Analogy Domain — set once in Account settings, then threaded
+-- through every AI explanation (summary regen, tutor chat, Teach-Back
+-- feedback, "explain differently") so explanations use analogies from a
+-- domain the student actually understands (e.g. "explain everything
+-- through cricket"). Null/empty means no preference set — explanations stay
+-- generic.
+alter table profiles add column if not exists analogy_domain text;
+
 -- Per-card spaced-repetition progress (SM-2). Flashcards themselves live
 -- inside notes.study_kit; this table only tracks how well each one is known.
 create table if not exists flashcard_progress (

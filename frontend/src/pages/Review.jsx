@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
-import { Brain, CheckCircle2, RotateCcw, Timer, Pause, Play, SkipForward, Mic, MicOff } from "lucide-react";
+import { Brain, CheckCircle2, RotateCcw, Timer, Pause, Play, SkipForward, Mic, MicOff, Sparkles, Loader2 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import { useAuth } from "../context/AuthContext";
-import { getDueCards, gradeCard, listNotes } from "../lib/api";
+import { getDueCards, gradeCard, listNotes, getSessionReplay } from "../lib/api";
 
 const SpeechRecognitionAPI =
   typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
@@ -153,6 +153,16 @@ export default function Review() {
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef(null);
 
+  // Study Session Replay — tracks what got graded this session (front +
+  // the quality grade) purely client-side, then turns it into one warm
+  // coach-style text message once the queue is empty. No new storage
+  // needed: the cards were already being graded via gradeCard, this just
+  // also remembers them locally for the recap call.
+  const [sessionCards, setSessionCards] = useState([]);
+  const [replay, setReplay] = useState(null);
+  const [replayLoading, setReplayLoading] = useState(false);
+  const replayRequested = useRef(false);
+
   useEffect(() => {
     if (!user) return;
     listNotes(user.id)
@@ -165,6 +175,9 @@ export default function Review() {
     setCards(null);
     setIndex(0);
     setFlipped(false);
+    setSessionCards([]);
+    setReplay(null);
+    replayRequested.current = false;
     getDueCards(user.id, selectedNoteId || undefined)
       .then((res) => setCards(res.cards || []))
       .catch(() => setCards([]));
@@ -182,6 +195,7 @@ export default function Review() {
         cardIndex: current.card_index,
         quality,
       });
+      setSessionCards((s) => [...s, { front: current.front, quality }]);
     } catch {
       toast.error("Couldn't save that — check the backend is running.");
     } finally {
@@ -190,6 +204,19 @@ export default function Review() {
       setIndex((i) => i + 1);
     }
   };
+
+  // Fires exactly once, right when the queue actually empties (index runs
+  // past the last card) — not on the "no cards were due at all" empty
+  // state, which has nothing to recap.
+  useEffect(() => {
+    if (!cards?.length || current || replayRequested.current || sessionCards.length === 0) return;
+    replayRequested.current = true;
+    setReplayLoading(true);
+    getSessionReplay(sessionCards)
+      .then((res) => setReplay(res.message))
+      .catch(() => {})
+      .finally(() => setReplayLoading(false));
+  }, [current, cards, sessionCards]);
 
   // Voice-First Hands-Free Review Mode — reads each card aloud, listens for
   // a spoken command to reveal the answer, reads that aloud too, then
@@ -347,6 +374,18 @@ export default function Review() {
               <p className="text-sm font-semibold text-ink/50 mb-5">
                 You reviewed {cards.length} card{cards.length === 1 ? "" : "s"}.
               </p>
+
+              {replayLoading ? (
+                <div className="mb-5 flex items-center justify-center gap-2 text-xs font-bold text-ink/30">
+                  <Loader2 size={14} className="animate-spin" /> Your coach is looking over this session...
+                </div>
+              ) : replay ? (
+                <div className="mb-5 p-4 rounded-xl2 bg-primary-50 text-left flex items-start gap-2.5">
+                  <Sparkles size={16} className="text-primary-500 mt-0.5 shrink-0" />
+                  <p className="text-sm font-semibold text-ink/70">{replay}</p>
+                </div>
+              ) : null}
+
               <button
                 onClick={() => navigate("/dashboard")}
                 className="px-6 py-2.5 rounded-xl2 bg-primary-500 text-white font-bold shadow-soft"

@@ -58,6 +58,24 @@ def list_notes(user_id: str) -> list[dict]:
     return result.data or []
 
 
+def list_notes_with_text_for_subject(user_id: str, subject: str) -> list[dict]:
+    """Feeds the cross-note knowledge graph — needs each note's actual
+    raw_text (list_notes above deliberately omits it, it's heavy), scoped
+    to one subject so the graph is about one coherent syllabus rather than
+    mixing e.g. Biology and World History into one map."""
+    client = get_client()
+    result = (
+        client.table("notes")
+        .select("id, title, raw_text")
+        .eq("user_id", user_id)
+        .eq("subject", subject)
+        .order("created_at", desc=True)
+        .limit(8)
+        .execute()
+    )
+    return result.data or []
+
+
 def list_public_notes(limit: int = 50, subject: str | None = None) -> list[dict]:
     """Powers the public, indexable gallery of shared study kits (Part 4:
     a search like 'Biology Chapter 5 flashcards' should be able to land a
@@ -205,6 +223,26 @@ def get_profile(user_id: str) -> dict:
     client = get_client()
     result = client.table("profiles").select("*").eq("id", user_id).maybe_single().execute()
     return result.data if result and result.data else {"id": user_id, "xp": 0, "streak": 0}
+
+
+def get_analogy_domain(user_id: str) -> str | None:
+    """The student's one-time "explain everything through ___" preference
+    (e.g. cricket, gaming, cooking) — threaded into every explanation prompt
+    that supports it. None/empty means no preference set."""
+    client = get_client()
+    result = client.table("profiles").select("analogy_domain").eq("id", user_id).maybe_single().execute()
+    domain = (result.data or {}).get("analogy_domain") if result and result.data else None
+    return (domain or "").strip() or None
+
+
+def set_analogy_domain(user_id: str, domain: str | None) -> None:
+    client = get_client()
+    value = (domain or "").strip()[:60] or None
+    existing = client.table("profiles").select("id").eq("id", user_id).maybe_single().execute()
+    if existing and existing.data:
+        client.table("profiles").update({"analogy_domain": value}).eq("id", user_id).execute()
+    else:
+        client.table("profiles").insert({"id": user_id, "xp": 0, "streak": 0, "analogy_domain": value}).execute()
 
 
 def check_and_increment_daily_generations(user_id: str, limit: int) -> None:
@@ -582,6 +620,62 @@ def get_class_heatmap(limit: int = 12) -> list[dict]:
     return out[:limit]
 
 
+def get_global_hardest_topics(subject: str | None = None, limit: int = 10) -> list[dict]:
+    """Global, anonymized "hardest questions" databank: the same
+    student-count-gated aggregation as get_class_heatmap above, but pulled
+    from quiz_answer_log instead of the plain per-term counters — which
+    means each topic can carry one real (anonymized) example question
+    alongside its miss rate, and results can be scoped to a subject by
+    joining each answer's note_id back to that note's subject. A genuine
+    data-network-effect feature: it gets more useful the more students use
+    the app, at no extra engineering cost since it's just a wider query
+    over data already being logged for other features (Confidence
+    Calibration, Mistake-Pattern Retrospective)."""
+    client = get_client()
+    rows = (
+        client.table("quiz_answer_log")
+        .select("topic, question, is_correct, note_id, user_id")
+        .execute()
+    ).data or []
+
+    if subject:
+        note_ids = list({r["note_id"] for r in rows if r.get("note_id")})
+        subject_by_note: dict[str, str] = {}
+        if note_ids:
+            notes_result = client.table("notes").select("id, subject").in_("id", note_ids).execute()
+            subject_by_note = {n["id"]: (n.get("subject") or "General") for n in (notes_result.data or [])}
+        rows = [r for r in rows if subject_by_note.get(r.get("note_id")) == subject]
+
+    agg: dict[str, dict] = {}
+    for r in rows:
+        topic = (r.get("topic") or "").strip()
+        if not topic:
+            continue
+        a = agg.setdefault(topic, {"correct": 0, "wrong": 0, "students": set(), "example_question": None})
+        if r.get("is_correct"):
+            a["correct"] += 1
+        else:
+            a["wrong"] += 1
+            if r.get("question"):
+                a["example_question"] = r["question"]  # anonymized — no user tied to the output
+        a["students"].add(r.get("user_id"))
+
+    out = []
+    for topic, a in agg.items():
+        total = a["correct"] + a["wrong"]
+        student_count = len(a["students"])
+        if total == 0 or student_count < MIN_STUDENTS_FOR_HEATMAP:
+            continue  # same anonymity floor as the class heatmap
+        out.append({
+            "topic": topic,
+            "miss_rate": round(a["wrong"] / total * 100),
+            "student_count": student_count,
+            "example_question": a["example_question"],
+        })
+    out.sort(key=lambda x: x["miss_rate"], reverse=True)
+    return out[:limit]
+
+
 # ---------------------------------------------------------------------------
 # Study-buddy matching — opt-in only, and a student picks their own display
 # name rather than their real email ever being shown to anyone else.
@@ -672,6 +766,56 @@ def get_weak_topics(user_id: str, limit: int = 5) -> list[dict]:
     weak = [r for r in rows if r["wrong_count"] >= r.get("correct_count", 0)]
     weak.sort(key=lambda r: r["wrong_count"] - r.get("correct_count", 0), reverse=True)
     return weak[:limit]
+
+
+def get_exam_readiness(user_id: str) -> dict:
+    """One combined "exam-readiness %" out of data already collected
+    elsewhere — quiz accuracy per topic (topic_progress) and how much of
+    the flashcard deck is currently overdue (same query get_due_flashcards
+    uses) — no AI call, pure arithmetic. Weighted 65% accuracy / 35% "deck
+    freshness" (due cards dragging the score down) so a student who's
+    getting things right but badly behind on reviews still sees that
+    reflected, not just quiz performance in isolation.
+
+    Returns ready: False until there's at least one scored quiz answer —
+    a 0-100 number with zero real signal behind it would be actively
+    misleading, worse than just not showing one yet."""
+    client = get_client()
+
+    topic_result = (
+        client.table("topic_progress")
+        .select("term, correct_count, wrong_count")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    topics = topic_result.data or []
+    total_correct = sum(t.get("correct_count") or 0 for t in topics)
+    total_wrong = sum(t.get("wrong_count") or 0 for t in topics)
+    total_answers = total_correct + total_wrong
+
+    if total_answers == 0:
+        return {"ready": False}
+
+    notes_result = client.table("notes").select("id, study_kit").eq("user_id", user_id).execute()
+    notes = notes_result.data or []
+    total_cards = sum(len((n.get("study_kit") or {}).get("flashcards") or []) for n in notes)
+    due_count = len(get_due_flashcards(user_id))
+
+    accuracy = total_correct / total_answers
+    freshness = 1.0 if total_cards == 0 else max(0.0, 1 - due_count / total_cards)
+    score = round(100 * max(0.0, min(1.0, 0.65 * accuracy + 0.35 * freshness)))
+
+    weak_count = sum(1 for t in topics if (t.get("wrong_count") or 0) >= (t.get("correct_count") or 0))
+
+    return {
+        "ready": True,
+        "score": score,
+        "accuracy_pct": round(accuracy * 100),
+        "due_count": due_count,
+        "total_cards": total_cards,
+        "topics_tracked": len(topics),
+        "weak_topics_count": weak_count,
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -11,7 +11,8 @@ from app.services.drive_service import download_drive_file, DriveImportError
 from app.services.embeddings_service import embed_and_store_note, search_notes
 from app.services.gemini_service import (
     generate_study_kit, transcribe_audio, detect_contradictions,
-    generate_mock_exam, find_syllabus_gaps, build_knowledge_graph, AIGenerationError,
+    generate_mock_exam, find_syllabus_gaps, build_knowledge_graph,
+    build_cross_note_knowledge_graph, AIGenerationError,
 )
 from app.services import supabase_client
 from app.services.supabase_client import DailyLimitExceeded
@@ -40,14 +41,14 @@ def _enforce_daily_cap(user_id: str):
 
 def _generate_with_cache(
     source_text: str, level: str, quiz_count: int, language: str, mode: str,
-    weak_topics: list[str] | None = None, board: str | None = None,
+    weak_topics: list[str] | None = None, board: str | None = None, analogy_domain: str | None = None,
 ) -> dict:
     """Serves a cached study kit for identical input instead of re-calling
-    Gemini, saving quota on duplicate uploads/re-combines. Weak-topic-biased
-    or board-tailored regenerations are never cached (they're personalized,
-    not reusable across students)."""
+    Gemini, saving quota on duplicate uploads/re-combines. Weak-topic-biased,
+    board-tailored, or analogy-domain-personalized regenerations are never
+    cached (they're personalized, not reusable across students)."""
     cache_key = None
-    if not weak_topics and not board:
+    if not weak_topics and not board and not analogy_domain:
         try:
             cache_key = supabase_client.make_cache_key(source_text, level, quiz_count, language, mode)
             cached = supabase_client.get_cached_study_kit(cache_key)
@@ -59,7 +60,7 @@ def _generate_with_cache(
     try:
         study_kit = generate_study_kit(
             source_text, level=level, quiz_count=quiz_count, language=language, mode=mode,
-            weak_topics=weak_topics, board=board,
+            weak_topics=weak_topics, board=board, analogy_domain=analogy_domain,
         )
     except AIGenerationError:
         raise HTTPException(502, "NoteBuddy's AI is having trouble right now — please try again in a moment.")
@@ -70,6 +71,13 @@ def _generate_with_cache(
         except RuntimeError:
             pass
     return study_kit
+
+
+def _get_analogy_domain(user_id: str) -> str | None:
+    try:
+        return supabase_client.get_analogy_domain(user_id)
+    except RuntimeError:
+        return None
 
 
 @router.post("/extract")
@@ -223,7 +231,7 @@ async def process_note(
         )
 
     _enforce_daily_cap(user_id)
-    study_kit = _generate_with_cache(source_text, level, quiz_count, language, mode, board=board)
+    study_kit = _generate_with_cache(source_text, level, quiz_count, language, mode, board=board, analogy_domain=_get_analogy_domain(user_id))
 
     saved = None
     try:
@@ -305,7 +313,7 @@ async def _process_stream_generator(
 
         yield _sse("generating")
         try:
-            study_kit = _generate_with_cache(source_text, level, quiz_count, language, mode, board=board)
+            study_kit = _generate_with_cache(source_text, level, quiz_count, language, mode, board=board, analogy_domain=_get_analogy_domain(user_id))
         except HTTPException as e:
             yield _sse("error", message=str(e.detail))
             return
@@ -393,7 +401,7 @@ async def combine_notes(
 
     combined_text = "\n\n".join(sections)
     _enforce_daily_cap(user_id)
-    study_kit = _generate_with_cache(combined_text, req.level, req.quiz_count, req.language, "full")
+    study_kit = _generate_with_cache(combined_text, req.level, req.quiz_count, req.language, "full", analogy_domain=_get_analogy_domain(user_id))
     study_kit["title"] = f"Combined review: {', '.join(titles[:3])}" + (
         f" +{len(titles) - 3} more" if len(titles) > 3 else ""
     )
@@ -585,6 +593,28 @@ async def knowledge_graph_route(request: Request, note_id: str, current_user: Cu
     return graph
 
 
+@router.get("/knowledge-graph/subject/{subject}")
+@limiter.limit("10/minute")
+async def cross_note_knowledge_graph_route(
+    request: Request, subject: str, current_user: CurrentUser = Depends(get_current_user)
+):
+    """The cross-note upgrade: one concept map spanning every note the
+    student has for this subject, instead of one note's hub-and-spoke in
+    isolation — so a term from Chapter 3 of one note can link to a term
+    from Chapter 7 of another."""
+    try:
+        notes = supabase_client.list_notes_with_text_for_subject(current_user.id, subject)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    if len(notes) < 2:
+        raise HTTPException(400, "Need at least 2 notes on this subject to build a cross-note map.")
+    try:
+        graph = build_cross_note_knowledge_graph(notes)
+    except AIGenerationError:
+        raise HTTPException(502, "Couldn't build a cross-note concept map right now — please try again.")
+    return graph
+
+
 @router.get("/gallery")
 async def public_gallery(subject: str | None = None):
     """No auth required — a public, browsable/indexable gallery of every
@@ -689,5 +719,7 @@ async def regenerate_note(
             weak_topics = None
 
     _enforce_daily_cap(user_id)
-    study_kit = _generate_with_cache(note["raw_text"], level, quiz_count, language, "full", weak_topics)
+    study_kit = _generate_with_cache(
+        note["raw_text"], level, quiz_count, language, "full", weak_topics, analogy_domain=_get_analogy_domain(user_id)
+    )
     return {"study_kit": study_kit}

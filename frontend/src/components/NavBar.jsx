@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { Sparkles, LogOut, ChevronDown, Menu, X, LayoutDashboard, Brain, Layers, Plus, Sun, Moon, CalendarDays, Bell, BellOff, Gift, ShieldAlert, WifiOff, RotateCcw } from "lucide-react";
+import AnalogyDomainModal from "./AnalogyDomainModal";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useFontSize } from "../context/FontSizeContext";
@@ -283,6 +284,7 @@ function AccountMenu() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [offlineAIOpen, setOfflineAIOpen] = useState(false);
+  const [analogyOpen, setAnalogyOpen] = useState(false);
 
   useEffect(() => {
     const onClickOutside = (e) => {
@@ -380,6 +382,15 @@ function AccountMenu() {
             <button
               onClick={() => {
                 setOpen(false);
+                setAnalogyOpen(true);
+              }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-ink/70 hover:bg-primary-50 transition-colors"
+            >
+              <Sparkles size={16} /> Personalize explanations
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
                 setResetOpen(true);
               }}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-ink/70 hover:bg-primary-50 transition-colors"
@@ -409,6 +420,7 @@ function AccountMenu() {
       <DeleteAccountModal open={deleteOpen} onClose={() => setDeleteOpen(false)} />
       <ResetProgressModal open={resetOpen} onClose={() => setResetOpen(false)} />
       <OfflineAIModal open={offlineAIOpen} onClose={() => setOfflineAIOpen(false)} />
+      <AnalogyDomainModal open={analogyOpen} onClose={() => setAnalogyOpen(false)} />
     </div>
   );
 }

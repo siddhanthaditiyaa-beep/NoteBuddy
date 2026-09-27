@@ -220,6 +220,13 @@ export async function getWeakTopics(userId) {
   return handle(res);
 }
 
+export async function getExamReadiness(userId) {
+  const res = await fetch(`${API_BASE}/api/user/exam-readiness?user_id=${userId}`, {
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
 export async function combineNotes({ userId, noteIds, level, quizCount = 5, language = "English" }) {
   const res = await fetch(`${API_BASE}/api/notes/combine`, {
     method: "POST",
@@ -267,6 +274,15 @@ export async function recordQuizAnswer({ topic, correct, noteId, question, chose
 export async function getConfidenceCalibration() {
   const res = await fetch(`${API_BASE}/api/review/confidence-calibration`, {
     headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
+export async function getSessionReplay(cards) {
+  const res = await fetch(`${API_BASE}/api/coach/session-replay`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ cards }),
   });
   return handle(res);
 }
@@ -388,11 +404,45 @@ export async function resetProgress() {
   return handle(res);
 }
 
+export async function getAnalogyDomain() {
+  const res = await fetch(`${API_BASE}/api/user/analogy-domain`, {
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
+export async function setAnalogyDomain(domain) {
+  const res = await fetch(`${API_BASE}/api/user/analogy-domain`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ domain }),
+  });
+  return handle(res);
+}
+
 export async function teachBack({ contextText, concept, explanation }) {
   const res = await fetch(`${API_BASE}/api/practice/teach-back`, {
     method: "POST",
     headers: await authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ context_text: contextText, concept, explanation }),
+  });
+  return handle(res);
+}
+
+export async function startDebate({ contextText }) {
+  const res = await fetch(`${API_BASE}/api/practice/debate/start`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ context_text: contextText }),
+  });
+  return handle(res);
+}
+
+export async function debateRespond({ contextText, claim, history, studentResponse }) {
+  const res = await fetch(`${API_BASE}/api/practice/debate/respond`, {
+    method: "POST",
+    headers: await authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ context_text: contextText, claim, history, student_response: studentResponse }),
   });
   return handle(res);
 }
@@ -438,6 +488,13 @@ export async function getKnowledgeGraph(noteId) {
   return handle(res);
 }
 
+export async function getCrossNoteKnowledgeGraph(subject) {
+  const res = await fetch(`${API_BASE}/api/notes/knowledge-graph/subject/${encodeURIComponent(subject)}`, {
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
 export async function searchNotes(query) {
   const res = await fetch(`${API_BASE}/api/notes/search`, {
     method: "POST",
@@ -449,6 +506,14 @@ export async function searchNotes(query) {
 
 export async function getClassHeatmap() {
   const res = await fetch(`${API_BASE}/api/user/class-heatmap`, {
+    headers: await authHeaders(),
+  });
+  return handle(res);
+}
+
+export async function getHardestQuestions(subject) {
+  const params = subject ? `?subject=${encodeURIComponent(subject)}` : "";
+  const res = await fetch(`${API_BASE}/api/user/hardest-questions${params}`, {
     headers: await authHeaders(),
   });
   return handle(res);

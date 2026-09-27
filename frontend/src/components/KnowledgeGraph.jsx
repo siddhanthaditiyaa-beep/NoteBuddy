@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { Network as GraphIcon, Loader2 } from "lucide-react";
-import { getKnowledgeGraph } from "../lib/api";
+import { Network as GraphIcon, Loader2, Layers } from "lucide-react";
+import { getKnowledgeGraph, getCrossNoteKnowledgeGraph } from "../lib/api";
 
 const WIDTH = 760;
 const HEIGHT = 480;
@@ -139,19 +139,26 @@ function layoutGraph(nodes, edges) {
   return { nodes: positioned, edges: validEdges };
 }
 
-export default function KnowledgeGraph({ noteId }) {
+export default function KnowledgeGraph({ noteId, subject, subjectNoteCount = 0 }) {
   const [raw, setRaw] = useState(null); // { nodes, edges } | null
   const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(false);
   const [activeId, setActiveId] = useState(null);
+  // "note" = just this note's hub-and-spoke (original behavior). "subject"
+  // = the cross-note graph spanning every note the student has for this
+  // note's subject — only offered when there's actually more than one note
+  // to span.
+  const [mode, setMode] = useState("note");
+  const canGoCrossNote = subject && subjectNoteCount >= 2;
 
   const layout = useMemo(() => (raw ? layoutGraph(raw.nodes, raw.edges) : null), [raw]);
 
-  const load = async () => {
+  const load = async (which = mode) => {
     setLoading(true);
     try {
-      const data = await getKnowledgeGraph(noteId);
+      const data = which === "subject" ? await getCrossNoteKnowledgeGraph(subject) : await getKnowledgeGraph(noteId);
       setRaw(data);
+      setMode(which);
     } catch (e) {
       toast.error(e.message || "Couldn't build a concept map right now.");
     } finally {
@@ -164,6 +171,7 @@ export default function KnowledgeGraph({ noteId }) {
     setRaw(null);
     setFetched(false);
     setActiveId(null);
+    setMode("note");
   }, [noteId]);
 
   if (!fetched) {
@@ -177,14 +185,27 @@ export default function KnowledgeGraph({ noteId }) {
           Maps the key concepts in this note and how they connect — sometimes seeing the shape of an idea is what
           makes it click.
         </p>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="px-6 py-3 rounded-xl2 bg-primary-500 text-white font-bold shadow-soft hover:bg-primary-600 disabled:opacity-60 transition-colors flex items-center gap-2 mx-auto"
-        >
-          {loading ? <Loader2 size={16} className="animate-spin" /> : <GraphIcon size={16} />}
-          {loading ? "Mapping concepts..." : "Build the concept map"}
-        </button>
+        <div className="flex items-center justify-center gap-3 flex-wrap">
+          <button
+            onClick={() => load("note")}
+            disabled={loading}
+            className="px-6 py-3 rounded-xl2 bg-primary-500 text-white font-bold shadow-soft hover:bg-primary-600 disabled:opacity-60 transition-colors flex items-center gap-2"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <GraphIcon size={16} />}
+            {loading ? "Mapping concepts..." : "Build the concept map"}
+          </button>
+          {canGoCrossNote && (
+            <button
+              onClick={() => load("subject")}
+              disabled={loading}
+              title={`Map concepts across all ${subjectNoteCount} of your ${subject} notes`}
+              className="px-6 py-3 rounded-xl2 bg-white shadow-card text-primary-600 font-bold hover:bg-primary-50 disabled:opacity-60 transition-colors flex items-center gap-2"
+            >
+              <Layers size={16} />
+              Map all of {subject}
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -202,6 +223,27 @@ export default function KnowledgeGraph({ noteId }) {
 
   return (
     <div>
+      {canGoCrossNote && (
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-bold text-ink/40">
+            {mode === "subject" ? `Cross-note map — all of ${subject}` : "This note only"}
+          </p>
+          <button
+            onClick={() => load(mode === "subject" ? "note" : "subject")}
+            disabled={loading}
+            className="text-xs font-bold text-primary-600 hover:text-primary-700 disabled:opacity-60 flex items-center gap-1"
+          >
+            {loading ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : mode === "subject" ? (
+              <GraphIcon size={12} />
+            ) : (
+              <Layers size={12} />
+            )}
+            {mode === "subject" ? "Switch to this note only" : `Switch to all of ${subject}`}
+          </button>
+        </div>
+      )}
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full h-auto bg-white rounded-xl2 shadow-card">
         {layout.edges.map((e, i) => {
           const a = layout.nodes.find((n) => n.id === e.source);

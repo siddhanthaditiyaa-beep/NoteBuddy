@@ -35,6 +35,39 @@ async def weak_topics(current_user: CurrentUser = Depends(get_current_user)):
     return {"topics": topics}
 
 
+class AnalogyDomainRequest(BaseModel):
+    domain: str | None = None
+
+
+@router.get("/analogy-domain")
+async def get_analogy_domain(current_user: CurrentUser = Depends(get_current_user)):
+    """The student's one-time "explain everything through ___" preference."""
+    try:
+        return {"domain": supabase_client.get_analogy_domain(current_user.id)}
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+
+@router.post("/analogy-domain")
+async def set_analogy_domain_route(req: AnalogyDomainRequest, current_user: CurrentUser = Depends(get_current_user)):
+    try:
+        supabase_client.set_analogy_domain(current_user.id, req.domain)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    return {"status": "ok", "domain": (req.domain or "").strip() or None}
+
+
+@router.get("/exam-readiness")
+async def exam_readiness(current_user: CurrentUser = Depends(get_current_user)):
+    """The single combined "exam-readiness %" — pure arithmetic over quiz
+    accuracy and flashcard-review freshness the app already tracks, no
+    extra AI call. See get_exam_readiness's docstring for the formula."""
+    try:
+        return supabase_client.get_exam_readiness(current_user.id)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+
 @router.post("/reset-progress")
 async def reset_progress(current_user: CurrentUser = Depends(get_current_user)):
     """Clears weak topics, logged quiz answers, and flashcard spaced-
@@ -72,6 +105,18 @@ async def class_heatmap(current_user: CurrentUser = Depends(get_current_user)):
     returned carries no identity at all."""
     try:
         return {"heatmap": supabase_client.get_class_heatmap()}
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+
+@router.get("/hardest-questions")
+async def hardest_questions(subject: str | None = None, current_user: CurrentUser = Depends(get_current_user)):
+    """Global, anonymized "hardest questions" databank — same anonymity
+    floor as /class-heatmap, aggregated across every NoteBuddy student
+    (optionally scoped to one subject), with one real example question per
+    topic so it reads as concrete rather than just a bar chart of terms."""
+    try:
+        return {"topics": supabase_client.get_global_hardest_topics(subject=subject)}
     except RuntimeError as e:
         raise HTTPException(503, str(e))
 

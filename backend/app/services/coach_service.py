@@ -134,3 +134,36 @@ Rules:
         except Exception as e:
             last_err = e
     raise CoachError(f"Study coach failed: {last_err}")
+
+
+def generate_session_replay(cards: list[dict]) -> str:
+    """Study Session Replay: same underlying signal as the Study Coach
+    above (what went well, what didn't), but for ONE just-finished review
+    session and framed as a short, warm text message — like a coach
+    texting you right after practice — instead of a dashboard card. `cards`
+    is [{"front": str, "quality": 0-5}], the SM-2 grade the student gave
+    each flashcard this session (0-3 = shaky, 4-5 = solid)."""
+    if not cards:
+        raise CoachError("No cards reviewed this session.")
+
+    solid = [c["front"] for c in cards if (c.get("quality") or 0) >= 4]
+    shaky = [c["front"] for c in cards if (c.get("quality") or 0) < 4]
+    lines = "\n".join(f'- "{c.get("front", "")[:120]}" — graded {c.get("quality")}/5' for c in cards[:30])
+
+    prompt = f"""You are NoteBuddy's coach, texting a student right after they just finished a flashcard review session — not a dashboard summary, an actual short message like a coach would text after watching someone practice.
+
+THIS SESSION'S CARDS (front + the quality grade 0-5 the student gave themselves, 4-5 = knew it well, 0-3 = shaky):
+{lines}
+
+Solid ({len(solid)}): {", ".join(solid[:6]) or "none"}
+Shaky ({len(shaky)}): {", ".join(shaky[:6]) or "none"}
+
+Write ONE short text message (2-4 sentences, casual and warm, like "Good session. You nailed X, still shaky on Y — I moved that to tomorrow's review."). Reference specific card fronts by name where it fits naturally, don't just say "some cards." If everything was solid, celebrate that genuinely rather than manufacturing a weakness. Plain text only, no JSON, no markdown, no preamble like "Here's your message:"."""
+    try:
+        response = genai.GenerativeModel(COACH_MODEL).generate_content(prompt)
+        text = (response.text or "").strip()
+        if not text:
+            raise ValueError("Empty reply")
+        return text
+    except Exception as e:
+        raise CoachError(f"Session replay failed: {e}")
