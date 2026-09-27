@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { Send, Bot, User, Mic, Square, WifiOff, ArrowDown } from "lucide-react";
-import { chatAboutNotes } from "../lib/api";
+import { chatAboutNotes, logFeatureUse } from "../lib/api";
 import { isOfflineModelReady, askOfflineAI } from "../lib/offlineAI";
 
 // Inline auto-generated diagram — renders the tiny step-chain a chat reply
@@ -107,6 +107,7 @@ export default function ChatPanel({ rawText, language = "English" }) {
         const systemPrompt = `You are NoteBuddy, a friendly study tutor. Answer the student's question using ONLY this material:\n\n${(rawText || "").slice(0, 3000)}\n\nKeep answers short (2-4 sentences) and clear.`;
         const reply = await askOfflineAI(systemPrompt, question);
         setMessages((m) => [...m, { role: "assistant", content: reply || "I couldn't come up with an answer to that." }]);
+        logFeatureUse("offline_ai");
       } catch (e) {
         // Surface the real reason (e.g. "the engine hasn't been cached on
         // this device yet") instead of a one-size-fits-all message that
@@ -122,6 +123,7 @@ export default function ChatPanel({ rawText, language = "English" }) {
     try {
       const { reply, diagram } = await chatAboutNotes({ rawText, question, history: nextMessages, language });
       setMessages((m) => [...m, { role: "assistant", content: reply, diagram: diagram?.steps }]);
+      logFeatureUse("chat");
     } catch (e) {
       const offlineHint = isOffline
         ? " You're offline — download Offline AI from the account menu to keep chatting without a connection."

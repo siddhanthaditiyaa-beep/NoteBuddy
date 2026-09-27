@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { Network as GraphIcon, Loader2, Layers } from "lucide-react";
-import { getKnowledgeGraph, getCrossNoteKnowledgeGraph } from "../lib/api";
+import { getKnowledgeGraph, getCrossNoteKnowledgeGraph, logFeatureUse } from "../lib/api";
 
 const WIDTH = 760;
 const HEIGHT = 480;
@@ -159,6 +159,7 @@ export default function KnowledgeGraph({ noteId, subject, subjectNoteCount = 0 }
       const data = which === "subject" ? await getCrossNoteKnowledgeGraph(subject) : await getKnowledgeGraph(noteId);
       setRaw(data);
       setMode(which);
+      logFeatureUse("knowledge_graph");
     } catch (e) {
       toast.error(e.message || "Couldn't build a concept map right now.");
     } finally {

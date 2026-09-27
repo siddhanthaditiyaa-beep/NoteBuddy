@@ -8,7 +8,7 @@ import LevelSlider from "../components/LevelSlider";
 import QuizCountSlider from "../components/QuizCountSlider";
 import LanguageSelector from "../components/LanguageSelector";
 import { useAuth } from "../context/AuthContext";
-import { listNotes, combineNotes, getContradictions } from "../lib/api";
+import { listNotes, combineNotes, getContradictions, logFeatureUse } from "../lib/api";
 
 export default function Combine() {
   const { user } = useAuth();
@@ -67,6 +67,7 @@ export default function Combine() {
     try {
       const result = await combineNotes({ userId: user.id, noteIds: selected, level, quizCount, language });
       sessionStorage.setItem("notebuddy_last_result", JSON.stringify(result));
+      logFeatureUse("combine_notes");
       toast.success("Combined study kit ready! +15 XP 🎉");
       navigate("/results", { state: { result } });
     } catch (e) {

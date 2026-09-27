@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
 from app.auth import get_current_user, CurrentUser
+from app.rate_limit import limiter
 from app.services import supabase_client
 
 router = APIRouter(prefix="/api/user", tags=["user"])
@@ -144,6 +145,39 @@ async def study_buddy_opt_in(req: StudyBuddyOptInRequest, current_user: CurrentU
     except RuntimeError as e:
         raise HTTPException(503, str(e))
     return {"status": "ok"}
+
+
+class FeatureUsageRequest(BaseModel):
+    feature: str
+
+
+@router.post("/feature-usage")
+@limiter.limit("60/minute")
+async def log_feature_usage_route(
+    request: Request, req: FeatureUsageRequest, current_user: CurrentUser = Depends(get_current_user)
+):
+    """Fire-and-forget analytics ping — see the technical gap report's
+    "no feature-usage analytics" gap. Deliberately returns 200 even when
+    logging fails (bad/unknown feature name, Supabase hiccup): this must
+    never be something the frontend has to handle as an error, since it's
+    firing in the background while the student is doing something else."""
+    try:
+        supabase_client.log_feature_usage(current_user.id, req.feature)
+    except RuntimeError:
+        pass
+    return {"status": "ok"}
+
+
+@router.get("/feature-usage-summary")
+async def feature_usage_summary(current_user: CurrentUser = Depends(get_current_user)):
+    """Most/least-used features across the whole app — not scoped to this
+    user, this is an aggregate. Gated to any logged-in user for now (there's
+    no admin-role concept yet) since it carries no per-student identity or
+    content, only counts."""
+    try:
+        return {"features": supabase_client.get_feature_usage_summary()}
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
 
 
 @router.get("/study-buddy/matches")

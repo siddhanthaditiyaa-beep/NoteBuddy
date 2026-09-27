@@ -51,4 +51,10 @@ export default defineConfig({
       },
     }),
   ],
+  test: {
+    // Pure-function/unit tests only for now (lib/), so plain Node is
+    // enough — no jsdom dependency needed until component tests are added.
+    environment: 'node',
+    include: ['src/**/*.test.js'],
+  },
 })

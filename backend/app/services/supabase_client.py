@@ -533,6 +533,51 @@ def log_quiz_answer(
     }).execute()
 
 
+# Server-side allowlist so the log stays a clean, known set of event names
+# instead of accepting whatever string a client happens to send — this is
+# an analytics table, not free-form input, and a fixed vocabulary is also
+# what makes the "most/least used feature" aggregate actually readable.
+ALLOWED_FEATURE_EVENTS = {
+    "generate_note", "combine_notes", "flashcards", "practice_mode",
+    "teach_back", "debate_mode", "exam_twin", "quiz", "chat",
+    "knowledge_graph", "study_planner", "offline_ai",
+}
+
+
+def log_feature_usage(user_id: str, feature: str) -> None:
+    """One row per feature-use event — see supabase_schema.sql's
+    feature_usage_log table for the aggregate query this feeds. Best-effort
+    by design (callers wrap this the same way as log_quiz_answer): a
+    logging hiccup must never be visible to the student using the feature."""
+    feature = (feature or "").strip()
+    if feature not in ALLOWED_FEATURE_EVENTS:
+        return
+    client = get_client()
+    client.table("feature_usage_log").insert({"user_id": user_id, "feature": feature}).execute()
+
+
+def get_feature_usage_summary() -> list[dict]:
+    """Most/least-used features, aggregated server-side in Python since this
+    is a small table and it avoids needing a Postgres RPC function just for
+    one admin-facing count — see the SQL version of the same query in
+    supabase_schema.sql for running it directly instead."""
+    client = get_client()
+    result = client.table("feature_usage_log").select("feature, user_id").execute()
+    rows = result.data or []
+    counts: dict[str, dict] = {}
+    for row in rows:
+        feature = row["feature"]
+        bucket = counts.setdefault(feature, {"feature": feature, "uses": 0, "users": set()})
+        bucket["uses"] += 1
+        bucket["users"].add(row["user_id"])
+    summary = [
+        {"feature": b["feature"], "uses": b["uses"], "unique_users": len(b["users"])}
+        for b in counts.values()
+    ]
+    summary.sort(key=lambda b: b["uses"], reverse=True)
+    return summary
+
+
 def get_confidence_calibration(user_id: str) -> dict:
     """Buckets every logged answer that had a confidence rating by that
     rating, and reports actual accuracy within each bucket — the gap

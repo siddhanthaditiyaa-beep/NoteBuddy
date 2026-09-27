@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { Swords, Loader2, CheckCircle2, Trophy, RotateCcw } from "lucide-react";
-import { startDebate, debateRespond } from "../lib/api";
+import { startDebate, debateRespond, logFeatureUse } from "../lib/api";
 
 const STRENGTH_STYLE = {
   strong: { className: "bg-mint-50 border-mint-500 text-mint-700", label: "You held your ground!" },
@@ -32,6 +32,7 @@ export default function DebateMode({ rawText = "" }) {
       setHistory([{ role: "ai", text: res.opening_argument }]);
       setVerdict(null);
       setIsFinal(false);
+      logFeatureUse("debate_mode");
     } catch (e) {
       toast.error(e.message || "Couldn't start a debate right now.");
     } finally {

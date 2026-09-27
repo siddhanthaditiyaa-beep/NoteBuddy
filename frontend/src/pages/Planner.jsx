@@ -10,6 +10,7 @@ import {
   listStudyPlans,
   deleteStudyPlan,
   updateStudyPlanChecked,
+  logFeatureUse,
 } from "../lib/api";
 
 // The one genuinely agentic feature in NoteBuddy: instead of one prompt in,
@@ -71,6 +72,7 @@ export default function Planner() {
       setPlan(res.plan);
       setActivePlanId(res.id || null);
       refreshPastPlans();
+      logFeatureUse("study_planner");
     } catch (e) {
       toast.error(e.message || "Couldn't build a plan right now — try again in a moment.");
     } finally {

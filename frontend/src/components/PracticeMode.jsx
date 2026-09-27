@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { CheckCircle2, AlertCircle, XCircle, Loader2, ArrowRight } from "lucide-react";
-import { gradeShortAnswer } from "../lib/api";
+import { gradeShortAnswer, logFeatureUse } from "../lib/api";
 
 const VERDICT_STYLE = {
   correct: { icon: CheckCircle2, className: "bg-mint-50 border-mint-500 text-mint-700", label: "Correct!" },
@@ -32,6 +32,7 @@ export default function PracticeMode({ cards = [], rawText = "" }) {
     try {
       const res = await gradeShortAnswer({ contextText: rawText, question: card.front, studentAnswer: answer });
       setResult(res);
+      logFeatureUse("practice_mode");
     } catch (e) {
       toast.error(e.message || "Couldn't grade that right now.");
     } finally {

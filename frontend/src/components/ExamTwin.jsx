@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { FileText, Clock, Loader2, CheckCircle2, XCircle, Sparkles } from "lucide-react";
-import { generateExamTwin, gradeShortAnswer } from "../lib/api";
+import { generateExamTwin, gradeShortAnswer, logFeatureUse } from "../lib/api";
 
 function formatClock(totalSeconds) {
   const m = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
@@ -35,6 +35,7 @@ export default function ExamTwin({ noteId, rawText, board }) {
       setAnswers({});
       setSecondsLeft((data.duration_minutes || duration) * 60);
       setPhase("taking");
+      logFeatureUse("exam_twin");
       timerRef.current = setInterval(() => {
         setSecondsLeft((s) => {
           if (s <= 1) {

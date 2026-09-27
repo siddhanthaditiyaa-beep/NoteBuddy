@@ -39,8 +39,9 @@ import ExamTwin from "../components/ExamTwin";
 import KnowledgeGraph from "../components/KnowledgeGraph";
 import LevelSlider from "../components/LevelSlider";
 import { useAuth } from "../context/AuthContext";
-import { regenerateNote, shareNote, recordQuizAnswer, listNotes } from "../lib/api";
+import { regenerateNote, shareNote, recordQuizAnswer, listNotes, logFeatureUse } from "../lib/api";
 import { shareInfographic } from "../lib/infographic";
+import { TAB_GROUPS, groupForTab } from "../lib/tabGroups";
 
 // Maps the language names used across the app (see LanguageSelector /
 // SUPPORTED_LANGUAGES on the backend) to a BCP-47 tag so the browser picks
@@ -73,6 +74,13 @@ const TABS = [
   { id: "mindmap", label: "Mind Map", icon: GitBranch },
   { id: "chat", label: "Ask NoteBuddy", icon: MessageCircle },
 ];
+
+// Grouping the 10 tabs by intent instead of build order — with all of them
+// in one flat row, only 3-4 fit on a phone screen at once and the rest sit
+// behind a scroll with nothing to hint what's off-screen. TABS itself
+// (label/icon/requiresNoteId) stays the single source of truth; TAB_GROUPS
+// (lib/tabGroups.js) just reorganizes references to it into 3 pills the tab
+// row filters by.
 
 // Walks the read-aloud through the whole kit — summary, then key terms,
 // then flashcard Q&As — instead of just the summary paragraph, so it works
@@ -110,6 +118,20 @@ export default function Results() {
   const [noteId] = useState(stored?.note?.id);
   const [language] = useState(stored?.language || "English");
   const [tab, setTab] = useState("summary");
+  const [activeGroup, setActiveGroup] = useState("learn");
+  const goToTab = (tabId) => {
+    setTab(tabId);
+    setActiveGroup(groupForTab(tabId));
+    if (tabId === "flashcards") logFeatureUse("flashcards");
+  };
+  const goToGroup = (groupId) => {
+    setActiveGroup(groupId);
+    // Jump to that group's first tab so the panel below always matches
+    // whichever pill is highlighted, instead of showing stale content
+    // from whatever tab was active in the previous group.
+    const firstTab = TAB_GROUPS.find((g) => g.id === groupId)?.tabs[0];
+    if (firstTab) setTab(firstTab);
+  };
   const [level, setLevel] = useState("student");
   // The tab row has 9 tabs and scrolls horizontally on phones with nothing
   // to hint that — teammate feedback was you'd see "Exam Twin" then a
@@ -349,6 +371,7 @@ export default function Results() {
 
   const handleQuizAnswer = ({ topic, correct, question, chosenAnswer, correctAnswer, confidence }) => {
     recordQuizAnswer({ topic, correct, noteId, question, chosenAnswer, correctAnswer, confidence }).catch(() => {});
+    logFeatureUse("quiz");
   };
 
   return (
@@ -441,16 +464,29 @@ export default function Results() {
             )}
           </div>
 
+          <div className="flex gap-2 mb-3">
+            {TAB_GROUPS.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => goToGroup(g.id)}
+                className={`px-4 py-2 rounded-xl2 font-bold text-sm transition-all ${
+                  activeGroup === g.id ? "bg-ink text-white shadow-soft" : "bg-white text-ink/50 shadow-card"
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
           <div className="relative mb-6">
             <div
               ref={tabsRef}
               onScroll={updateTabsScroll}
               className="flex gap-2 overflow-x-auto scroll-smooth"
             >
-              {TABS.filter((t) => !t.requiresNoteId || noteId).map((t) => (
+              {TABS.filter((t) => (!t.requiresNoteId || noteId) && TAB_GROUPS.find((g) => g.id === activeGroup)?.tabs.includes(t.id)).map((t) => (
                 <button
                   key={t.id}
-                  onClick={() => setTab(t.id)}
+                  onClick={() => goToTab(t.id)}
                   className={`px-4 py-2.5 rounded-xl2 font-bold text-sm flex items-center gap-2 shrink-0 transition-all ${
                     tab === t.id ? "bg-primary-500 text-white shadow-soft" : "bg-white text-ink/60 shadow-card"
                   }`}
@@ -501,6 +537,31 @@ export default function Results() {
               >
                 {tab === "summary" && (
                   <div className="bg-white rounded-xl2 shadow-card p-6 space-y-6">
+                    {studyKit.fact_check?.ran && (
+                      <div
+                        title={
+                          studyKit.fact_check.clean
+                            ? "A second AI pass re-checked this summary against your original material for mixed-up names, dates or facts, and found none."
+                            : "A second AI pass flagged a possible mixed-up name, date or fact below — double check it against your source."
+                        }
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                          studyKit.fact_check.clean
+                            ? "bg-mint-100 text-mint-700"
+                            : "bg-coral-100 text-coral-700"
+                        }`}
+                      >
+                        <Check size={12} /> {studyKit.fact_check.clean ? "AI double-checked this" : "AI flagged a possible mix-up"}
+                      </div>
+                    )}
+                    {!studyKit.fact_check?.clean && studyKit.fact_check?.issues?.length > 0 && (
+                      <div className="p-3 rounded-xl2 bg-coral-50 border border-coral-100 space-y-1">
+                        {studyKit.fact_check.issues.map((issue, i) => (
+                          <p key={i} className="text-xs font-semibold text-coral-700">
+                            <span className="font-bold">{issue.claim}:</span> {issue.problem}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                     <p className="font-semibold text-ink/80 leading-relaxed">{studyKit.summary}</p>
                     <div>
                       <h3 className="font-display font-bold mb-3">Key terms</h3>

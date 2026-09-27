@@ -238,6 +238,39 @@ STUDY MATERIAL:
     return _call_gemini_json(prompt, REQUIRED_STUDY_KIT_KEYS)
 
 
+def verify_study_kit_facts(source_text: str, summary: str, key_terms: list[dict]) -> dict:
+    """Second-pass fact-check: re-reads the summary/key_terms against the
+    ORIGINAL source text and flags (does not fix) anything where a name,
+    date, or fact looks attributed to the wrong entity.
+
+    This exists because generate_study_kit() writes the whole study kit in
+    one shot with no built-in step where the model re-reads its own output
+    against the source afterward. Catching an error in existing text is an
+    easier task for the model than generating correct text from scratch, so
+    this cheap second call catches conflations the prompt-level guard rule
+    in generate_study_kit() misses. It only ever runs against the summary
+    (not flashcards/quiz) to keep the added cost small, and failures here
+    are non-fatal — see notes.py's _generate_with_cache()."""
+    key_terms_text = "\n".join(f"- {t.get('term', '')}: {t.get('definition', '')}" for t in (key_terms or []))
+    prompt = f"""Compare this SUMMARY against the SOURCE TEXT. Flag any place where two distinct named people, dates, or events appear to have been merged or mixed up (e.g. one person's title, fate, or timeline attributed to a different person mentioned nearby in the source). Do not flag paraphrasing, simplification, or omitted detail — only flag actual factual conflations. Return ONLY JSON in this exact shape:
+{{"clean": true|false, "issues": [{{"claim": "the exact wrong claim from the summary", "problem": "one sentence on what's wrong"}}]}}
+
+SOURCE TEXT:
+\"\"\"
+{source_text[:8000]}
+\"\"\"
+
+SUMMARY TO CHECK:
+\"\"\"
+{summary}
+\"\"\"
+
+KEY TERMS TO CHECK:
+{key_terms_text}
+"""
+    return _call_gemini_json(prompt, {"clean", "issues"}, max_attempts=1)
+
+
 def chat_about_notes(
     text: str, question: str, history: list[dict], language: str = "English", analogy_domain: str | None = None
 ) -> str:

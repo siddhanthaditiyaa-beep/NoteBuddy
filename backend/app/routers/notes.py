@@ -12,7 +12,7 @@ from app.services.embeddings_service import embed_and_store_note, search_notes
 from app.services.gemini_service import (
     generate_study_kit, transcribe_audio, detect_contradictions,
     generate_mock_exam, find_syllabus_gaps, build_knowledge_graph,
-    build_cross_note_knowledge_graph, AIGenerationError,
+    build_cross_note_knowledge_graph, verify_study_kit_facts, AIGenerationError,
 )
 from app.services import supabase_client
 from app.services.supabase_client import DailyLimitExceeded
@@ -65,12 +65,35 @@ def _generate_with_cache(
     except AIGenerationError:
         raise HTTPException(502, "NoteBuddy's AI is having trouble right now — please try again in a moment.")
 
+    study_kit["fact_check"] = _verify_facts(source_text, study_kit)
+
     if cache_key:
         try:
             supabase_client.save_cached_study_kit(cache_key, study_kit)
         except RuntimeError:
             pass
     return study_kit
+
+
+def _verify_facts(source_text: str, study_kit: dict) -> dict:
+    """Runs the second-pass fact-check (gemini_service.verify_study_kit_facts)
+    against the summary/key_terms this generation just produced. Failures
+    here (rate limit, malformed response, etc.) are swallowed on purpose —
+    this is a safety net on top of generation, not a required step, so a
+    verification hiccup must never turn into a 502 for the student. On any
+    failure we report ran=False so the frontend just hides the badge instead
+    of claiming a check that didn't actually happen."""
+    try:
+        result = verify_study_kit_facts(
+            source_text, study_kit.get("summary", ""), study_kit.get("key_terms", [])
+        )
+        return {
+            "ran": True,
+            "clean": bool(result.get("clean", True)),
+            "issues": result.get("issues", []) or [],
+        }
+    except AIGenerationError:
+        return {"ran": False, "clean": True, "issues": []}
 
 
 def _get_analogy_domain(user_id: str) -> str | None:

@@ -578,3 +578,20 @@ export async function applyNoteSubject(noteId, subject) {
   });
   return handle(res);
 }
+
+// Fire-and-forget usage ping — same pattern as wakeBackend() above: callers
+// never await this and it never throws, so a logging hiccup (offline,
+// logged out, backend momentarily down) is invisible to whatever feature
+// the student is actually using. See the backend's ALLOWED_FEATURE_EVENTS
+// (supabase_client.py) for the fixed event-name vocabulary this must match.
+export function logFeatureUse(feature) {
+  authHeaders({ "Content-Type": "application/json" })
+    .then((headers) =>
+      fetch(`${API_BASE}/api/user/feature-usage`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ feature }),
+      })
+    )
+    .catch(() => {});
+}

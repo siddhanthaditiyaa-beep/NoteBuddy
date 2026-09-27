@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import { GraduationCap, CheckCircle2, AlertTriangle, Loader2, ArrowRight } from "lucide-react";
-import { teachBack } from "../lib/api";
+import { teachBack, logFeatureUse } from "../lib/api";
 
 const LEVEL_STYLE = {
   solid: { className: "bg-mint-50 border-mint-500 text-mint-700", label: "Solid understanding!" },
@@ -33,6 +33,7 @@ export default function TeachBackMode({ cards = [], rawText = "" }) {
     try {
       const res = await teachBack({ contextText: rawText, concept, explanation });
       setResult(res);
+      logFeatureUse("teach_back");
     } catch (e) {
       toast.error(e.message || "Couldn't check that explanation right now.");
     } finally {

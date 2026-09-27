@@ -11,7 +11,7 @@ import LevelSlider from "../components/LevelSlider";
 import QuizCountSlider from "../components/QuizCountSlider";
 import LanguageSelector from "../components/LanguageSelector";
 import { useAuth } from "../context/AuthContext";
-import { processNoteStream, extractText, getYoutubeTranscript, importFromDrive } from "../lib/api";
+import { processNoteStream, extractText, getYoutubeTranscript, importFromDrive, logFeatureUse } from "../lib/api";
 
 // A wider bank than just 3 examples so a student's stated subject (from the
 // signup question, see onboarding personalization) can surface a matching
@@ -322,6 +322,7 @@ export default function Upload() {
         onStage: setStage,
       });
       sessionStorage.setItem("notebuddy_last_result", JSON.stringify(result));
+      logFeatureUse("generate_note");
       toast.success("+10 XP! Your study kit is ready 🎉");
       navigate("/results", { state: { result } });
     } catch (e) {
