@@ -15,6 +15,7 @@ import google.generativeai as genai
 from app.config import GEMINI_API_KEY
 from app.services import supabase_client
 from app.services.embeddings_service import search_notes
+from app.services.gemini_service import _analogy_instruction
 
 genai.configure(api_key=GEMINI_API_KEY)
 
@@ -57,21 +58,16 @@ def run_tutor_agent(user_id: str, current_note_text: str, question: str, history
             f"natural translation in their standard form."
         )
 
-    # Personalized Analogy Domain — same one-time "explain everything
-    # through cricket/gaming/cooking" preference used by the study-kit
-    # generator, threaded in here too so the tutor chat gets the same
-    # "wait, it gets me" effect, not just the initial summary.
-    analogy_instruction = ""
+    # Personalized Analogy Domain — same one-to-three-domain "explain
+    # everything through cricket/gaming/cooking" preference used by the
+    # study-kit generator (see gemini_service._analogy_instruction, reused
+    # here so the tutor chat gets the same "wait, it gets me" effect and the
+    # same mix-across-domains behavior, not just the initial summary).
     try:
         domain = supabase_client.get_analogy_domain(user_id)
     except RuntimeError:
         domain = None
-    if domain:
-        analogy_instruction = (
-            f"\nThis student understands new ideas best through {domain} analogies. Wherever it "
-            f"genuinely fits, reach for a concrete analogy from {domain} to make an idea land — "
-            f"but never force one onto something it doesn't naturally map to."
-        )
+    analogy_instruction = _analogy_instruction(domain)
 
     history_text = ""
     for turn in history[-6:]:

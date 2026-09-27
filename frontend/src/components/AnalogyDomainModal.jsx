@@ -8,14 +8,18 @@ import { getAnalogyDomain, setAnalogyDomain } from "../lib/api";
 // Presets cover the most common "explain it through ___" requests, but the
 // text field always stays open for anything else a student wants.
 const PRESETS = ["Cricket", "Football", "Gaming", "Cooking", "Movies", "Music"];
+const MAX_DOMAINS = 3;
 
-// Personalized Analogy Domain — set once here, threaded into every
+// Personalized Analogy Domain — pick 1-3 things here, threaded into every
 // explanation-shaped prompt across the app (summary/regen, tutor chat,
-// Teach-Back feedback, "explain differently") so those explanations lean
-// on analogies from something the student already understands.
+// Teach-Back feedback, "explain differently") so those explanations mix
+// analogies from whichever of these a student actually recognizes. Most
+// people know more than one thing (a sport AND gaming, say), so this isn't
+// locked to a single choice the way it used to be.
 export default function AnalogyDomainModal({ open, onClose }) {
-  const [domain, setDomain] = useState("");
-  const [saved, setSaved] = useState("");
+  const [selected, setSelected] = useState([]);
+  const [savedSelected, setSavedSelected] = useState([]);
+  const [customInput, setCustomInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -24,21 +28,53 @@ export default function AnalogyDomainModal({ open, onClose }) {
     setLoading(true);
     getAnalogyDomain()
       .then((res) => {
-        setDomain(res.domain || "");
-        setSaved(res.domain || "");
+        const domains = res.domains || (res.domain ? res.domain.split(",").map((d) => d.trim()).filter(Boolean) : []);
+        setSelected(domains);
+        setSavedSelected(domains);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [open]);
 
-  const save = async (value) => {
-    const next = (value ?? domain).trim();
+  const isDirty = JSON.stringify(selected) !== JSON.stringify(savedSelected);
+
+  const toggle = (value) => {
+    setSelected((prev) => {
+      if (prev.includes(value)) return prev.filter((v) => v !== value);
+      if (prev.length >= MAX_DOMAINS) {
+        toast(`You can pick up to ${MAX_DOMAINS} — remove one first.`, { icon: "✨" });
+        return prev;
+      }
+      return [...prev, value];
+    });
+  };
+
+  const addCustom = () => {
+    const value = customInput.trim();
+    if (!value) return;
+    if (selected.some((v) => v.toLowerCase() === value.toLowerCase())) {
+      setCustomInput("");
+      return;
+    }
+    if (selected.length >= MAX_DOMAINS) {
+      toast(`You can pick up to ${MAX_DOMAINS} — remove one first.`, { icon: "✨" });
+      return;
+    }
+    setSelected((prev) => [...prev, value]);
+    setCustomInput("");
+  };
+
+  const save = async (next = selected) => {
     setSaving(true);
     try {
-      await setAnalogyDomain(next || null);
-      setSaved(next);
-      setDomain(next);
-      toast.success(next ? `Explanations will now lean on ${next} analogies.` : "Analogy preference cleared.");
+      await setAnalogyDomain(next);
+      setSelected(next);
+      setSavedSelected(next);
+      if (next.length === 0) {
+        toast.success("Analogy preference cleared.");
+      } else {
+        toast.success(`Explanations will now mix in ${next.join(", ")} analogies.`);
+      }
     } catch (e) {
       toast.error(e.message || "Couldn't save that right now.");
     } finally {
@@ -85,9 +121,12 @@ export default function AnalogyDomainModal({ open, onClose }) {
                 </button>
               </div>
               <h2 className="font-display text-lg font-bold mb-2">Personalize explanations</h2>
-              <p className="text-sm font-semibold text-ink/60 mb-4">
-                Tell NoteBuddy what you understand best through, and it'll reach for analogies from that everywhere —
+              <p className="text-sm font-semibold text-ink/60 mb-1">
+                Pick 1-3 things you understand best, and NoteBuddy will mix in analogies from them —
                 summaries, tutor chat, Teach-Back feedback, "explain differently."
+              </p>
+              <p className="text-xs font-bold text-primary-500 mb-4">
+                {selected.length}/{MAX_DOMAINS} selected
               </p>
 
               {loading ? (
@@ -97,37 +136,76 @@ export default function AnalogyDomainModal({ open, onClose }) {
               ) : (
                 <>
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {PRESETS.map((p) => (
-                      <button
-                        key={p}
-                        onClick={() => save(p)}
-                        disabled={saving}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors disabled:opacity-60 ${
-                          saved === p ? "bg-primary-500 text-white" : "bg-primary-50 text-primary-600 hover:bg-primary-100"
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    ))}
+                    {PRESETS.map((preset) => {
+                      const active = selected.includes(preset);
+                      const disabled = !active && selected.length >= MAX_DOMAINS;
+                      return (
+                        <button
+                          key={preset}
+                          onClick={() => toggle(preset)}
+                          disabled={saving || disabled}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors disabled:opacity-40 ${
+                            active ? "bg-primary-500 text-white" : "bg-primary-50 text-primary-600 hover:bg-primary-100"
+                          }`}
+                        >
+                          {active && <Check size={11} className="inline mr-1 -mt-0.5" />}
+                          {preset}
+                        </button>
+                      );
+                    })}
                   </div>
+
+                  {/* Any custom (non-preset) domains the student has picked, shown as removable chips */}
+                  {selected.filter((v) => !PRESETS.includes(v)).length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {selected.filter((v) => !PRESETS.includes(v)).map((v) => (
+                        <button
+                          key={v}
+                          onClick={() => toggle(v)}
+                          disabled={saving}
+                          className="px-3 py-1.5 rounded-full text-xs font-bold bg-primary-500 text-white flex items-center gap-1 disabled:opacity-60"
+                        >
+                          {v} <X size={11} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex gap-2">
                     <input
-                      value={domain}
-                      onChange={(e) => setDomain(e.target.value)}
-                      placeholder="e.g. cricket, gardening, anime..."
-                      className="flex-1 px-3 py-2.5 rounded-xl2 bg-primary-50 outline-none font-semibold text-sm focus:ring-2 focus:ring-primary-300"
+                      value={customInput}
+                      onChange={(e) => setCustomInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addCustom();
+                        }
+                      }}
+                      placeholder="e.g. anime, gardening..."
+                      disabled={selected.length >= MAX_DOMAINS}
+                      className="flex-1 px-3 py-2.5 rounded-xl2 bg-primary-50 outline-none font-semibold text-sm focus:ring-2 focus:ring-primary-300 disabled:opacity-50"
                     />
                     <button
-                      onClick={() => save()}
-                      disabled={saving}
-                      className="px-4 rounded-xl2 bg-primary-500 text-white font-bold text-sm hover:bg-primary-600 disabled:opacity-60 transition-colors flex items-center justify-center shrink-0"
+                      onClick={addCustom}
+                      disabled={saving || !customInput.trim() || selected.length >= MAX_DOMAINS}
+                      className="px-4 rounded-xl2 bg-primary-50 text-primary-600 font-bold text-sm hover:bg-primary-100 disabled:opacity-40 transition-colors shrink-0"
                     >
-                      {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      Add
                     </button>
                   </div>
-                  {saved && (
+
+                  <button
+                    onClick={() => save()}
+                    disabled={saving || !isDirty || selected.length === 0}
+                    className="w-full mt-4 py-2.5 rounded-xl2 bg-primary-500 text-white font-bold text-sm hover:bg-primary-600 disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+                  >
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    Save
+                  </button>
+
+                  {savedSelected.length > 0 && (
                     <button
-                      onClick={() => save("")}
+                      onClick={() => save([])}
                       disabled={saving}
                       className="mt-3 text-xs font-bold text-ink/40 hover:text-coral-500 transition-colors"
                     >

@@ -120,19 +120,44 @@ def _weak_topics_instruction(weak_topics: list[str] | None) -> str:
     )
 
 
-def _analogy_instruction(analogy_domain: str | None) -> str:
-    """Personalized Analogy Domain — a student sets this ONCE in Account
-    settings ("explain everything through cricket/gaming/cooking") and it
-    gets threaded into every explanation-shaped prompt that supports it, so
-    the "wait, it actually gets me" effect isn't limited to one feature."""
+def _parse_analogy_domains(analogy_domain: str | None) -> list[str]:
+    """analogy_domain is stored as a single comma-separated string (e.g.
+    "Football, Cricket, Gaming") so every existing caller that already
+    threads a plain `analogy_domain: str | None` through stays unchanged —
+    only this parsing step and the instruction text below needed to learn
+    about "more than one". Capped at 3 defensively even though
+    set_analogy_domain already enforces that limit when saving."""
     if not analogy_domain or not analogy_domain.strip():
+        return []
+    return [d.strip() for d in analogy_domain.split(",") if d.strip()][:3]
+
+
+def _analogy_instruction(analogy_domain: str | None) -> str:
+    """Personalized Analogy Domain — a student picks 1-3 of these once in
+    Account settings ("explain everything through cricket/gaming/cooking")
+    and it gets threaded into every explanation-shaped prompt that supports
+    it, so the "wait, it actually gets me" effect isn't limited to one
+    feature. Most students recognize more than one domain (e.g. both a
+    sport and gaming), so this mixes across whichever ones are set instead
+    of forcing everything through a single lens."""
+    domains = _parse_analogy_domains(analogy_domain)
+    if not domains:
         return ""
-    domain = analogy_domain.strip()
+    if len(domains) == 1:
+        domain = domains[0]
+        return (
+            f"\nThis student understands new ideas best through {domain} analogies. Wherever it "
+            f"genuinely fits, reach for a concrete analogy from {domain} to make an idea land — "
+            f"but never force one onto something it doesn't naturally map to; a normal explanation "
+            f"is better than a strained comparison."
+        )
+    joined = ", ".join(domains[:-1]) + f" and {domains[-1]}"
     return (
-        f"\nThis student understands new ideas best through {domain} analogies. Wherever it "
-        f"genuinely fits, reach for a concrete analogy from {domain} to make an idea land — "
-        f"but never force one onto something it doesn't naturally map to; a normal explanation "
-        f"is better than a strained comparison."
+        f"\nThis student understands new ideas best through analogies from {joined}. Wherever it "
+        f"genuinely fits, reach for a concrete analogy from WHICHEVER of these domains fits that "
+        f"particular idea best — mix across them rather than forcing every explanation through the "
+        f"same one, and never force an analogy onto something that doesn't naturally map to any of "
+        f"them; a normal explanation is better than a strained comparison."
     )
 
 

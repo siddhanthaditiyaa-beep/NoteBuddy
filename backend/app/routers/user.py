@@ -37,25 +37,36 @@ async def weak_topics(current_user: CurrentUser = Depends(get_current_user)):
 
 
 class AnalogyDomainRequest(BaseModel):
-    domain: str | None = None
+    # Up to 3 domains, e.g. ["Football", "Cricket", "Gaming"] — many
+    # students recognize more than one, so explanations mix across
+    # whichever are set instead of forcing everything through just one.
+    domains: list[str] = []
 
 
 @router.get("/analogy-domain")
 async def get_analogy_domain(current_user: CurrentUser = Depends(get_current_user)):
-    """The student's one-time "explain everything through ___" preference."""
+    """The student's "explain everything through ___" preference. Returns
+    both the raw comma-joined `domain` string (what every AI prompt
+    consumes) and the parsed `domains` list (what the multi-select UI
+    prefills from) so neither side has to re-implement the split/join."""
     try:
-        return {"domain": supabase_client.get_analogy_domain(current_user.id)}
+        domain = supabase_client.get_analogy_domain(current_user.id)
     except RuntimeError as e:
         raise HTTPException(503, str(e))
+    domains = [d.strip() for d in (domain or "").split(",") if d.strip()]
+    return {"domain": domain, "domains": domains}
 
 
 @router.post("/analogy-domain")
 async def set_analogy_domain_route(req: AnalogyDomainRequest, current_user: CurrentUser = Depends(get_current_user)):
+    if len(req.domains) > 3:
+        raise HTTPException(400, "Pick at most 3 — NoteBuddy mixes analogies across whichever ones you choose.")
     try:
-        supabase_client.set_analogy_domain(current_user.id, req.domain)
+        supabase_client.set_analogy_domain(current_user.id, req.domains)
     except RuntimeError as e:
         raise HTTPException(503, str(e))
-    return {"status": "ok", "domain": (req.domain or "").strip() or None}
+    cleaned = [d.strip() for d in req.domains if d.strip()][:3]
+    return {"status": "ok", "domains": cleaned, "domain": ", ".join(cleaned) or None}
 
 
 @router.get("/exam-readiness")

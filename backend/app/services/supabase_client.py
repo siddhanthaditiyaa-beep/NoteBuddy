@@ -226,18 +226,34 @@ def get_profile(user_id: str) -> dict:
 
 
 def get_analogy_domain(user_id: str) -> str | None:
-    """The student's one-time "explain everything through ___" preference
-    (e.g. cricket, gaming, cooking) — threaded into every explanation prompt
-    that supports it. None/empty means no preference set."""
+    """The student's "explain everything through ___" preference — up to 3
+    domains (e.g. "Football, Cricket, Gaming"), stored as one comma-
+    separated string in the same column a single domain always used, so
+    every caller that just threads this straight into a prompt as a plain
+    string (gemini_service._analogy_instruction parses it) needed no
+    changes. None/empty means no preference set."""
     client = get_client()
     result = client.table("profiles").select("analogy_domain").eq("id", user_id).maybe_single().execute()
     domain = (result.data or {}).get("analogy_domain") if result and result.data else None
     return (domain or "").strip() or None
 
 
-def set_analogy_domain(user_id: str, domain: str | None) -> None:
+def set_analogy_domain(user_id: str, domains: list[str] | str | None) -> None:
+    """Accepts either a list of 1-3 domains (the normal path, from the
+    multi-select UI) or a single string (kept for anything still calling
+    this the old way) — either way it's normalized, deduped, capped at 3,
+    and stored as one comma-separated string."""
+    if isinstance(domains, str):
+        domains = [domains]
+    cleaned = []
+    for d in domains or []:
+        d = (d or "").strip()[:40]
+        if d and d not in cleaned:
+            cleaned.append(d)
+    cleaned = cleaned[:3]
+    value = ", ".join(cleaned) or None
+
     client = get_client()
-    value = (domain or "").strip()[:60] or None
     existing = client.table("profiles").select("id").eq("id", user_id).maybe_single().execute()
     if existing and existing.data:
         client.table("profiles").update({"analogy_domain": value}).eq("id", user_id).execute()

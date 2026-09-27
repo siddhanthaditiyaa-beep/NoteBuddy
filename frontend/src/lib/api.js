@@ -422,11 +422,12 @@ export async function getAnalogyDomain() {
   return handle(res);
 }
 
-export async function setAnalogyDomain(domain) {
+// domains: an array of up to 3 strings, e.g. ["Football", "Cricket"].
+export async function setAnalogyDomain(domains) {
   const res = await fetch(`${API_BASE}/api/user/analogy-domain`, {
     method: "POST",
     headers: await authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ domain }),
+    body: JSON.stringify({ domains: domains || [] }),
   });
   return handle(res);
 }
